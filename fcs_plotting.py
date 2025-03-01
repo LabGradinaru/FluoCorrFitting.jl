@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from lmfit import Model, Parameters
 
 STANDARD_YLABEL = r"$G(\tau)$"
 STANDARD_XLABEL = r"$\tau$ [s]"
@@ -50,33 +51,72 @@ def model_plot(lag_times, data, fit,
     plt.show()
 
 class DictTable(dict):
-    # Overridden dict class which takes a dict in the form {'a': 2, 'b': 3},
-    # and renders an HTML Table in IPython Notebook.
+    # Writes two dictionaries to an IPython table
     def _repr_html_(self):
-        html = ["<table width=40%>"]
+        html = ["<table width=15%>"]
+        html.append("<tr><td>Metric</td><td>Score</td><\tr>")
         for key, value in iter(self.items()):
             html.append("<tr>")
             html.append(f"<td>{key}</td>")
             scaled_value = SCALES[key] * value if key in SCALES.keys() else value
             html.append(f"<td>{scaled_value:.4f}</td>")
-            html.append(f"<td>{UNITS[key]}</td>")
             html.append("</tr>")
         html.append("</table>")
         return ''.join(html)
 
-def interpret_fit(fit, r0 = None):
-    params_dict = fit.best_values
-    if r0 is not None or 'r0' in params_dict.keys():
-        r0 = r0 if r0 is not None else params_dict['r0']
-        if 'D' in params_dict.keys() and 'tauD' not in params_dict.keys():
-            params_dict['tauD'] = r0**2 / (4 * params_dict['D'])
-        if 'tauD' in params_dict.keys() and 'D' not in params_dict.keys():
-            params_dict['D'] = r0**2 / (4 * params_dict['tauD'])
-        if 'n' and 's' in params_dict.keys() and 'C' not in params_dict.keys():
-            params_dict['C'] = params_dict['n'] / (np.pi**1.5 * params_dict['s'] * r0**3)
+def fit_evaluation(fit):
+    scores_dict = {}
 
-    params_dict['Reduced Chi-Squared'] = fit.redchi
-    params_dict['AIC'] = fit.aic
-    params_dict['R Squared'] = fit.rsquared
-    d = DictTable(params_dict)
+    scores_dict['Reduced Chi-Squared'] = fit.redchi
+    scores_dict['AIC'] = fit.aic
+    scores_dict['R Squared'] = fit.rsquared
+    d = DictTable(scores_dict)
     return d
+
+def autocorr(ts, max_lag, normalize):
+    N = ts.size
+    avg = np.average(ts)
+    
+    fluct = ts - avg
+    num_elements = max_lag if max_lag <= N else N
+    results = np.ones(num_elements, dtype=ts.dtype)
+    if normalize:
+        results *= 1/np.var(fluct)
+
+    for i in range(num_elements):
+        results[i] *= np.sum(fluct[i:] * fluct[:(N-i)])/N
+    return results
+
+def residual_autocorrelation(fit, max_lag = 50, normalize=True, color='b'):
+    residuals = fit.residual
+    N = residuals.size
+    fig = plt.figure(1)
+
+    plt.stem(autocorr(residuals, max_lag, normalize), linefmt=color)
+    plt.axhline(2 / np.sqrt(N), linestyle='--', color='red')
+    plt.axhline(-2 / np.sqrt(N), linestyle='--', color='red')
+    plt.ylabel(r'$\hat{\rho} (h)$')
+    plt.xlabel(r'$h$')
+    plt.grid()
+    plt.show()
+
+def gaussian(x, amp, cen, wid):
+    """1-d gaussian: gaussian(x, amp, cen, wid)"""
+    return (amp / (np.sqrt(2*np.pi) * wid)) * np.exp(-(x-cen)**2 / (2*wid**2))
+
+def residuals_histogram(fit, num_bins = 20):
+    residuals = fit.residual
+    freqs, edges , _ = plt.hist(residuals, num_bins, label='Residuals')
+    bin_centres = (edges[:-1] + edges[1:])/2
+
+    model = Model(gaussian)
+    result = model.fit(freqs, x=bin_centres, amp=residuals.size/2, cen=0, wid=1)
+    best_model_values = tuple(result.values.values())
+
+    smoothed_domain = np.linspace(np.min(residuals), np.max(residuals), 1000)
+    plt.plot(smoothed_domain, gaussian(smoothed_domain, *best_model_values), '-', color='red', label='Fitted Gaussian')
+
+    plt.ylabel('Frequency')
+    plt.xlabel('Residual Value')
+    plt.legend()
+    plt.show()
