@@ -31,7 +31,11 @@ def trip(tau, tautr, T):
 def conf(tau, amps, tcs):
     """Unnormalized contribution due to conformational dynamics.
        Krichevsky O, Bonnet G. (2002). Fluorescence correlation spectroscopy: the technique and its applications"""
-    UCC = 1 + np.sum(amps * np.exp(-tau/tcs))
+    if np.sum(amps) == 0 or np.sum(tcs) == 0:
+        UCC = 0
+    else:
+        UCC = 1 + np.sum(amps * np.exp(-tau/tcs))
+    return UCC
 
 def CF_2d_gauss(taus, n, tauD, offset):
     """2D diffusion model with a gaussian confocal volume."""
