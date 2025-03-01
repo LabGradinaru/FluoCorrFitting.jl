@@ -1,7 +1,7 @@
 import numpy as np
 
 def concentration(n, r0, s):
-    '''Calculate the concentration of particles in the confocal volume.'''
+    """Calculate the concentration of particles in the confocal volume."""
     return n / (np.pi**1.5 * s * r0**3)
 
 def diffusion_coefficient(tauD, r0):
@@ -21,12 +21,17 @@ def threedd(tau, D, r0, s):
     return 1/((1 + tau/tauD) * np.sqrt(1 + tau/(s**2 * tauD)))
 
 def trip(tau, tautr, T):
-    '''Unnormalized triplet state model'''
+    """Unnormalized triplet state model."""
     if tautr == 0 or T == 0:
         UTC = 0
     else:
         UTC = 1 + T/(1-T) * np.exp(-tau / tautr)
     return UTC
+
+def conf(tau, amps, tcs):
+    """Unnormalized contribution due to conformational dynamics.
+       Krichevsky O, Bonnet G. (2002). Fluorescence correlation spectroscopy: the technique and its applications"""
+    UCC = 1 + np.sum(amps * np.exp(-tau/tcs))
 
 def CF_2d_gauss(taus, n, tauD, offset):
     """2D diffusion model with a gaussian confocal volume."""
@@ -55,7 +60,7 @@ def CF_3d_gauss_1T(taus, n, tauD, s, offset, tautr1, T1):
     return G
 
 def CF_3d_gauss_1T_fixD(taus, n, D, r0, s, offset, tautr1, T1):
-    """3D diffusion model with a Gaussian confocal volume.
+    """3D diffusion model with a Gaussian confocal volume and a single triplet state.
        Addition r0 parameter allows for fixing of the diffusion coefficient."""
     UDC = threedd(taus, D, r0, s)
     UTC = trip(taus, tautr1, T1)
@@ -63,19 +68,48 @@ def CF_3d_gauss_1T_fixD(taus, n, D, r0, s, offset, tautr1, T1):
     return G
 
 def CF_3d_gauss_2T(taus, n, tauD, s, offset, tautr1, T1, tautr2, T2):
-    """3D diffusion model with a gaussian confocal volume and a single triplet state."""
+    """3D diffusion model with a gaussian confocal volume and two triplet states."""
     UDC = threed(taus, tauD, s)
     UTC1 = trip(taus, tautr1, T1)
     UTC2 = trip(taus, tautr2, T2)
     G = offset + UTC1 * UTC2 * UDC / n
     return G
 
-def CF_3d_gauss_2T(taus, n, D, r0, s, offset, tautr1, T1, tautr2, T2):
-    """3D diffusion model with a gaussian confocal volume and a single triplet state."""
+def CF_3d_gauss_2T_fixD(taus, n, D, r0, s, offset, tautr1, T1, tautr2, T2):
+    """3D diffusion model with a Gaussian confocal volume and two triplet states.
+       Addition r0 parameter allows for fixing of the diffusion coefficient."""
     UDC = threedd(taus, D, r0, s)
     UTC1 = trip(taus, tautr1, T1)
     UTC2 = trip(taus, tautr2, T2)
     G = offset + UTC1 * UTC2 * UDC / n
+    return G
+
+def CF_3d_gauss_3T(taus, n, tauD, s, offset, tautr1, T1, tautr2, T2, tautr3, T3):
+    """3D diffusion model with a gaussian confocal volume and three triplet states."""
+    UDC = threed(taus, tauD, s)
+    UTC1 = trip(taus, tautr1, T1)
+    UTC2 = trip(taus, tautr2, T2)
+    UTC3 = trip(taus, tautr3, T3)
+    G = offset + UTC1 * UTC2 * UTC3 * UDC / n
+    return G
+
+def CF_3d_gauss_2c(taus, n, tauD1, tauD2, f1, s, offset):
+    """Two-component 3D diffusion model with a gaussian confocal volume.
+       This model assumes that each component has equal brightness.
+       Corrections can be performed after to account for this following
+       https://www.fcsxpert.com/classroom/theory/autocorrelation-diffusion-multiple.html"""
+    UDC1 = threed(taus, tauD1, s)
+    UDC2 = threed(taus, tauD2, s)
+    G = offset + (f1 * UDC1 + (1 - f1) * UDC2) / n
+    return G
+
+def CF_3d_gauss_3c(taus, n, tauD1, tauD2, tauD3, f1, f2, s, offset):
+    """Three-component 3D diffusion model with a gaussian confocal volume.
+       This model assumes that each component has equal brightness."""
+    UDC1 = threed(taus, tauD1, s)
+    UDC2 = threed(taus, tauD2, s)
+    UDC3 = threed(taus, tauD3, s)
+    G = offset + (f1 * UDC1 + f2 * UDC2 + (1 - f1 - f2) * UDC3) / n
     return G
 
 def weight_function(errors, n = 1):
