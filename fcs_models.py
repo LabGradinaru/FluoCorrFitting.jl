@@ -11,6 +11,10 @@ def twod(tau, tauD):
     """Unnormalized 2D diffusion model"""
     return 1/(1 + tau/tauD)
 
+def twoda(tau, tauD,a):
+    """Unnormalized 2D diffusion model with anomalous diffusion"""
+    return 1/(1 + (tau/tauD)**a)
+
 def threed(tau, tauD, s):
     """Unnormalized 3D diffusion model"""
     return 1/((1 + tau/tauD) * np.sqrt(1 + tau/(s**2 * tauD)))
@@ -41,6 +45,35 @@ def CF_2d_gauss(taus, n, tauD, offset):
     """2D diffusion model with a gaussian confocal volume."""
     UDC = twod(taus, tauD)
     G = offset + UDC / n
+    return G
+
+def CF_2d_2c(taus, n, tauD1, tauD2, f1, offset):
+    """2D diffusion model with a gaussian confocal volume."""
+    UDC1 = twod(taus, tauD1)
+    UDC2 = twod(taus, tauD2)
+    G = offset + (f1 * UDC1 + (1 - f1) * UDC2) / n
+    return G
+
+def CF_2d_1T(taus, n, tauD, tautr, T, offset):
+    """2D diffusion model with a gaussian confocal volume."""
+    UDC = twod(taus, tauD)
+    UTC = trip(taus, tautr, T)
+    G = offset + UDC * UTC / n
+    return G
+
+def CF_2da_2c(taus, n, tauD1, a1, tauD2, a2, f1, offset):
+    """2D diffusion model with a gaussian confocal volume."""
+    UDC1 = twoda(taus, tauD1,a1)
+    UDC2 = twoda(taus, tauD2,a2)
+    G = offset + (f1 * UDC1 + (1 - f1) * UDC2) / n
+    return G
+
+def CF_2da_2c_1T(taus, n, tauD1, a1, tauD2, a2, f1, tautr, T, offset):
+    """2D diffusion model with a gaussian confocal volume."""
+    UDC1 = twoda(taus, tauD1,a1)
+    UDC2 = twoda(taus, tauD2,a2)
+    UTC = trip(taus, tautr, T)
+    G = offset + (f1 * UDC1 + (1 - f1) * UDC2) * UTC / n
     return G
 
 def CF_3d_gauss(taus, n, tauD, s, offset):
