@@ -123,10 +123,29 @@ function fcs_fit(model::Function, lag_times::AbstractVector,
         ((x, θ) -> model(x, θ; scales=scales_)) :
         ((x, θ) -> model(x, θ; scales=scales_, n_diff=n_diff))
 
-    # Fit
-    fit = isnothing(wt) ?
-        curve_fit(model2, collect(lag_times), corr_data, θ0; kwargs...) :
-        curve_fit(model2, collect(lag_times), corr_data, wt, θ0; kwargs...)
+    # Extract optional bounds/weights from kwargs
+    lower_in = get(kwargs, :lower, nothing)
+    upper_in = get(kwargs, :upper, nothing)
+    filtered_kwargs = (; (k => v for (k,v) in kwargs if !(k in (:lower, :upper)))...)
+
+    normalize_bounds(b) = b === nothing ? nothing :
+        (length(b) == length(scales_) ? b ./ scales_ :
+        throw(ArgumentError("lower/upper must have length $(length(scales_))")))
+
+    lowerθ = normalize_bounds(lower_in)
+    upperθ = normalize_bounds(upper_in)
+
+    # Fitting
+    x = collect(lag_times)
+    fit = if (lowerθ !== nothing) && (upperθ !== nothing)
+        curve_fit(model2, x, corr_data, θ0; lower = lowerθ, upper = upperθ, filtered_kwargs...) 
+    elseif (lowerθ !== nothing)
+        curve_fit(model2, x, corr_data, wt, θ0; lower = lowerθ, filtered_kwargs...)
+    elseif (upperθ !== nothing)
+        curve_fit(model2, x, corr_data, wt, θ0; upper = upperθ, filtered_kwargs...)
+    else
+        curve_fit(model2, x, y, θ0; extra_kwargs...)
+    end
 
     return fit, scales_
 end
@@ -159,7 +178,7 @@ function fcs_plot(model::Function, lag_times::AbstractVector, data::AbstractVect
          ylabel = L"\mathrm{Residuals}",
          xscale = log10, height = 100, width = 600,
          xtickformat = xs -> [L"%$(log10(xs[i]))" for i in eachindex(xs)],
-         ytickformat = ys -> [L"%$(ys[i])" for i in eachindex(ys)])
+         ytickformat = ys -> [L"%$(round(ys[i],sigdigits=2))" for i in eachindex(ys)])
 
     scatterlines!(lag_times, fit.resid; color=color3, markersize=5, strokewidth=1, alpha=0.7)
 
