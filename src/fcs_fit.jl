@@ -96,6 +96,8 @@ function fcs_fit(model::Function, lag_times::AbstractVector,
                  wt::Union{Nothing,AbstractVector}=nothing,
                  n_diff::Union{Nothing,Int}=nothing,
                  scales::Union{Nothing,AbstractVector}=nothing,
+                 ics::Union{Nothing,AbstractVector{Int}}=nothing,
+                 diffusivity::Union{Nothing,Real}=nothing,
                  zero_sub::Real=1.0, kwargs...)
     length(lag_times) == length(corr_data) ||
         throw(ArgumentError("Lag times and correlation values must be of equal length."))
@@ -120,8 +122,8 @@ function fcs_fit(model::Function, lag_times::AbstractVector,
 
     # Build a two-arg model for LsqFit that maps θ → p
     model2 = isnothing(n_diff) ?
-        ((x, θ) -> model(x, θ; scales=scales_)) :
-        ((x, θ) -> model(x, θ; scales=scales_, n_diff=n_diff))
+        ((x, θ) -> model(x, θ; scales=scales_, ics, diffusivity)) :
+        ((x, θ) -> model(x, θ; scales=scales_, ics, diffusivity, n_diff))
 
     # Extract optional bounds/weights from kwargs
     lower_in = get(kwargs, :lower, nothing)
