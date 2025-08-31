@@ -42,7 +42,7 @@ function infer_noscale_indices(model_name::Symbol, p0::AbstractVector; n_diff::U
             append!(idx, collect((base+m+1):(base+2m)))
         end
         return idx
-    elseif model_name === :fcs_3d
+    elseif (model_name === :fcs_3d) || (model_name === :fcs_2d_anom)
         m = _ndyn_from_len(L - 4)
         return m == 0 ? Int[] : collect((4+m+1):(4+2m))
     elseif model_name === :fcs_3d_mdiff
