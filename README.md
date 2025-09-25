@@ -25,16 +25,17 @@ And for 3-dimensional FCS, `fcs_3d`,
 *   `p[m+1:N]` → K_dyn; the fraction corresponding of the population corresponding to the dynamic lifetime.
 
 Each of these parameters are scaled to $\mathcal{O}(1)$ based on their initial guess for the values to stabilize the fitting.
+For calibration purposes, the diffusivity can be constrained by specifying the keyword argument `diffusivity` in `fcs_plot` or `fcs_fit`, which will result in the beam waist `w0` being the first parameter in the vector, in place of the diffusion time τD.
 
 The value of `m` in either case is inferred from the length of the parameter vector.
 The "dynamic lifetimes" and their fractions are kept rather general to allow them to encapsulate a number of phenomena including photophysical dark states (e.g., triplets and blinking), PET, and molecule dynamics which are broadly captured by an exponential kernel in the autocorrelation.
 To specify which elements of the parameter vector correspond to which physical phenomena, the keyword argument `ics`, short for "independent components" is present.
 For instance, if we are to have two triplet states with lifetimes $\tau_1$ and $\tau_2$, we expect that they are dependent on each other in the sense that if a fluorophore is in triplet state 1 it cannot be in triplet state 2.
-The result is that the contribution to the autocorrelation is the sum 
-$$1 + T_1 e^{- t / \tau_1} + T_2 e^{- t / \tau_2}$$
+The result is that the contribution to the autocorrelation is given by the sum 
+$$1 + T_1 \left( e^{- t / \tau_1} - 1 \right) + T_2 \left( e^{- t / \tau_2} - 1 \right)$$
 where $T_1$ and $T_2$ are the fraction of the population in the corresponding triplet state.
-On the other hand, if we have one triplet state and one PET location, we expect these events to be independent, amounting to a contribution
-$$\left( 1 + T e^{- t / \tau_\mathrm{tr}} \right) \left( 1 + Q e^{- t / \tau_\mathrm{pet}} \right)$$
+On the other hand, if we have one triplet state and one PET site, we expect these events to be independent, amounting to a contribution
+$$\left( 1 + T e^{- t / \tau_\mathrm{tr}} - T \right) \left( 1 + Q e^{- t / \tau_\mathrm{pet}} - Q \right)$$
 where $Q$ is the fraction of the observed time spent undergoing PET dynamics.
 In the first case, we specify `ics = [2]` since we wish for the two components to be dependent upon each other.
-In the second, oen may write `ics = [1,1]`, although this is taken as the base case so such a specification is optional.
+In the second, one may write `ics = [1,1]`, although this is taken as the base case so such a specification is optional.

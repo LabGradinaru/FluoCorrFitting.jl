@@ -98,16 +98,23 @@ Returns the LsqFit result and also `scales` so you can recover physical params.
 """
 function fcs_fit(model::Function, lag_times::AbstractVector, 
                  corr_data::AbstractVector, p0::AbstractVector;
+                 σ::Union{Nothing,AbstractVector}=nothing,
                  wt::Union{Nothing,AbstractVector}=nothing,
                  n_diff::Union{Nothing,Int}=nothing,
                  scales::Union{Nothing,AbstractVector}=nothing,
                  ics::Union{Nothing,AbstractVector{Int}}=nothing,
                  diffusivity::Union{Nothing,Real}=nothing,
                  zero_sub::Real=1.0, kwargs...)
+    # consistency checks
     length(lag_times) == length(corr_data) ||
         throw(ArgumentError("Lag times and correlation values must be of equal length."))
     !isnothing(wt) && (length(wt) == length(lag_times) ||
         throw(ArgumentError("Weights must have same size as lag times and data.")))
+    !isnothing(σ) && (length(σ) == length(lag_times) ||
+        throw(ArgumentError("Standard deviations must have same size as lag times and data.")))
+
+    # if no weight is given, replace with the inverse of the standard deviation, if it is given
+    (isnothing(wt) && !isnothing(σ)) && (wt = @. 1 / σ^2)
 
     # infer model name to pick non-scaled indices
     mname = nameof(model)  # Symbol if model is a named function
