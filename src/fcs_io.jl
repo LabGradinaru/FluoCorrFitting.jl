@@ -135,7 +135,12 @@ function infer_parameter_list(model_name::Symbol, params::AbstractVector;
 end
 
 """
-    fcs_plot(model::Function, ch, θ0, color1, color2, color3; residuals=true, kwargs...)
+    fcs_plot(model::Function, ch, θ0; residuals=true, color1, color2, color3, kwargs...)
+
+Top level fitting/ plotting function for FCS curves.
+Fit the data stored in `ch` with `model` starting at initial parameters `θ0`.
+Returns the Makie.Figure object, the LsqFit.LsqFitResult object and the scaling to get from
+the fitted parameters to the physical parameters.
 """
 function fcs_plot(model::Function, ch::FCSChannel, θ0::AbstractVector; 
                   residuals::Bool=true, color1=:deepskyblue3, 
@@ -148,37 +153,53 @@ function fcs_plot(model::Function, ch::FCSChannel, θ0::AbstractVector;
 end
 
 """
-    _fcs_plot(model::Function, ch, θ0; fontsize=20, 
-              color1=:deepskyblue3, color2=:orangered2, color3=:steelblue4, kwargs...)
+    _fcs_plot(model::Function, ch, θ0, color1, color2, color3; 
+              fig=nothing, fontsize=20, kwargs...)
 
 Fit FCS data with `model` using `fcs_fit` and generate a plot of the fit AND the residuals. 
 """
-function _fcs_plot(model::Function, ch::FCSChannel, θ0::AbstractVector, color1::Symbol, 
-                   color2::Symbol, color3::Symbol; fontsize::Int = 20, kwargs...)
+function _fcs_plot(model::Function, ch::FCSChannel, θ0::AbstractVector, 
+                   color1::Symbol, color2::Symbol, color3::Symbol; 
+                   fig::Union{Nothing,Makie.Figure}=nothing, 
+                   fontsize::Int = 20, kwargs...)
     fit, scales = fcs_fit(model, ch.τ, ch.G, θ0; σ = ch.σ, kwargs...)
 
-    fig = Figure(size=(700, 600), fontsize=fontsize)
+    # Create or reuse a figure
+    fig = isnothing(fig) ? Figure(size=(700, 600), fontsize=fontsize) : fig
 
-    # Top panel for main correlation fitting
-    Axis(fig[1,1];
-         xticklabelsvisible = false,
-         ylabel = L"\mathrm{Correlation} \; G(\tau)",
-         ytickformat = ys -> [L"%$(round(ys[i],sigdigits=2))" for i in eachindex(ys)],
-         xscale = log10, height = 400, width = 600)
+    # Find existing axes in the provided figure (in creation order)
+    axes_in_fig = [obj for obj in fig.content if obj isa Makie.Axis]
 
-    scatter!(ch.τ, ch.G; markersize=10, color=color1, strokewidth=1, strokecolor=:black, alpha=0.7)
-    lines!(ch.τ, model(ch.τ, fit.param .* scales; diffusivity = get(kwargs, :diffusivity, nothing)); 
+    if length(axes_in_fig) >= 2
+        # Reuse the first two axes (assumed top then bottom)
+        top_ax, bot_ax = axes_in_fig[1], axes_in_fig[2]
+    else
+        # Create missing axes (top: correlation; bottom: residuals)
+        top_ax = Axis(fig[1, 1];
+                      xticklabelsvisible = false,
+                      ylabel = L"\mathrm{Correlation}\;G(\tau)",
+                      ytickformat = ys -> [L"%$(round(ys[i], sigdigits=2))" for i in eachindex(ys)],
+                      xscale = log10, height = 400, width = 600)
+
+        bot_ax = Axis(fig[2, 1];
+                      xlabel = L"\mathrm{Logarithmic\ lag\ time}\; \log_{10}{\tau}",
+                      ylabel = L"\mathrm{Residuals}",
+                      xscale = log10, height = 100, width = 600,
+                      xtickformat = xs -> [L"%$(log10(xs[i]))" for i in eachindex(xs)],
+                      ytickformat = ys -> [L"%$(round(ys[i], sigdigits=2))" for i in eachindex(ys)])
+    end
+
+    # Plot data and fit on the top axis
+    scatter!(top_ax, ch.τ, ch.G; markersize=10, color=color1,
+             strokewidth=1, strokecolor=:black, alpha=0.7)
+
+    lines!(top_ax, ch.τ, model(ch.τ, fit.param .* scales;
+                               diffusivity = get(kwargs, :diffusivity, nothing));
            linewidth=3, color=color2, alpha=0.9)
 
-    # Bottom panel for residuals plot
-    Axis(fig[2,1];
-         xlabel = L"\mathrm{Logarithmic\ lag\ time}\; \log_{10}{\tau}",
-         ylabel = L"\mathrm{Residuals}",
-         xscale = log10, height = 100, width = 600,
-         xtickformat = xs -> [L"%$(log10(xs[i]))" for i in eachindex(xs)],
-         ytickformat = ys -> [L"%$(round(ys[i],sigdigits=2))" for i in eachindex(ys)])
-
-    scatterlines!(ch.τ, fit.resid; color=color3, markersize=5, strokewidth=1, alpha=0.7)
+    # Plot residuals on the bottom axis
+    scatterlines!(bot_ax, ch.τ, fit.resid; color=color3,
+                  markersize=5, strokewidth=1, alpha=0.7)
 
     return fig, fit, scales
 end
@@ -188,21 +209,27 @@ end
 
 Fit FCS data with `model` using `fcs_fit` and generate a plot of the fit WITHOUT the residuals. 
 """
-function _fcs_plot(model::Function, ch::FCSChannel, θ0::AbstractVector, color1::Symbol, 
-                   color2::Symbol; fontsize::Int = 20, kwargs...)
+function _fcs_plot(model::Function, ch::FCSChannel, θ0::AbstractVector, 
+                   color1::Symbol, color2::Symbol; fig::Union{Nothing,Makie.Figure}=nothing, 
+                   fontsize::Int = 20, kwargs...)
     fit, scales = fcs_fit(model, ch.τ, ch.G, θ0; σ = ch.σ, kwargs...)
 
-    fig = Figure(size=(700, 600), fontsize=fontsize)
+    fig = isnothing(fig) ? Figure(size=(700, 600), fontsize=fontsize) : fig
 
-    # Top panel for main correlation fitting
-    Axis(fig[1,1];
-         xticklabelsvisible = false,
-         ylabel = L"\mathrm{Correlation} \; G(\tau)",
-         ytickformat = ys -> [L"%$(round(ys[i],sigdigits=2))" for i in eachindex(ys)],
-         xscale = log10)
+    axes_in_fig = [obj for obj in fig.content if obj isa Makie.Axis]
 
-    scatter!(ch.τ, ch.G; markersize=10, color=color1, strokewidth=1, strokecolor=:black, alpha=0.7)
-    lines!(ch.τ, model(ch.τ, fit.param .* scales; diffusivity = get(kwargs, :diffusivity, nothing)); 
+    if length(axes_in_fig) >= 1
+        ax = axes_in_fig[1]
+    else
+        ax = Axis(fig[1,1];
+                 xticklabelsvisible = false,
+                 ylabel = L"\mathrm{Correlation} \; G(\tau)",
+                 ytickformat = ys -> [L"%$(round(ys[i],sigdigits=2))" for i in eachindex(ys)],
+                 xscale = log10)
+    end
+
+    scatter!(ax, ch.τ, ch.G; markersize=10, color=color1, strokewidth=1, strokecolor=:black, alpha=0.7)
+    lines!(ax, ch.τ, model(ch.τ, fit.param .* scales; diffusivity = get(kwargs, :diffusivity, nothing)); 
            linewidth=3, color=color2, alpha=0.9)
 
     return fig, fit, scales
