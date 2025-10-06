@@ -111,7 +111,7 @@ function fcs_fit(model::Function, lag_times::AbstractVector,
                  n_diff::Union{Nothing,Int}=nothing,
                  scales::Union{Nothing,AbstractVector}=nothing,
                  ics::Union{Nothing,AbstractVector{Int}}=nothing,
-                 diffusivity::Union{Nothing,Real}=nothing,
+                 diffusivity::Union{Nothing,Real}=nothing, #TODO: this should be controlled based on n_diff
                  offset::Union{Nothing,Real}=nothing,
                  zero_sub::Real=1.0, kwargs...)
     # consistency checks
@@ -144,7 +144,7 @@ function fcs_fit(model::Function, lag_times::AbstractVector,
     # Build a two-arg model for LsqFit that maps θ → p
     model2 = isnothing(n_diff) ?
         ((x, θ) -> model(x, θ; scales=scales_, ics, diffusivity, offset)) :
-        ((x, θ) -> model(x, θ; scales=scales_, ics, diffusivity, n_diff, offset))
+        ((x, θ) -> model(x, θ; scales=scales_, ics, n_diff, offset))
 
     # Extract optional bounds/weights from kwargs
     lower_in = get(kwargs, :lower, nothing)

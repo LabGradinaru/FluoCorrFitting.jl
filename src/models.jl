@@ -458,6 +458,7 @@ Mixture of `n` 3D diffusion components sharing the same structure factor `κ`.
 function fcs_3d_mdiff(t::Union{Real,AbstractVector{<:Real}}, p::AbstractVector{<:Real};
                       n_diff::Integer=1, scales::Union{Nothing,AbstractVector}=nothing,
                       ics::Union{Nothing, AbstractVector{Int}}=nothing,
+                      diffusivity::Union{Nothing,Real}=nothing,
                       offset::Union{Nothing,Real}=nothing)
     n_diff ≥ 1 || throw(ArgumentError("n_diff must be ≥ 1"))
     L = length(p)

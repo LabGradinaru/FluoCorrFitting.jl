@@ -15,6 +15,7 @@ using DelimitedFiles
 
 include("models.jl")
 include("fcs_fit.jl")
+include("gof.jl")
 include("fcs_io.jl")
 
 end #module
