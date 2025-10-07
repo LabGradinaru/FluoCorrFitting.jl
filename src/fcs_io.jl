@@ -225,11 +225,10 @@ function _fcs_plot(model::Function, ch::FCSChannel, θ0::AbstractVector,
     fit, scales = fcs_fit(model, ch.τ, ch.G, θ0; σ = ch.σ, kwargs...)
 
     # Create or reuse a figure
-    fig = isnothing(fig) ? Figure(size=(700, 600), fontsize=fontsize) : fig
+    fig = isnothing(fig) ? Figure(size=(700, 600); fontsize) : fig
 
     # Find existing axes in the provided figure (in creation order)
     axes_in_fig = [obj for obj in fig.content if obj isa Makie.Axis]
-
     if length(axes_in_fig) >= 2
         # Reuse the first two axes (assumed top then bottom)
         top_ax, bot_ax = axes_in_fig[1], axes_in_fig[2]
@@ -292,22 +291,22 @@ Internal: fit `ch` with `model` via `fcs_fit` and render **data + fit** (no resi
 Creates a single log-τ axis if none exists in `fig`.
 """
 function _fcs_plot(model::Function, ch::FCSChannel, θ0::AbstractVector, 
-                   color1::Symbol, color2::Symbol; fig::Union{Nothing,Makie.Figure}=nothing, 
+                   color1::Symbol, color2::Symbol; 
+                   fig::Union{Nothing,Makie.Figure}=nothing, 
                    fontsize::Int = 20, kwargs...)
     fit, scales = fcs_fit(model, ch.τ, ch.G, θ0; σ = ch.σ, kwargs...)
 
-    fig = isnothing(fig) ? Figure(size=(700, 600), fontsize=fontsize) : fig
+    fig = isnothing(fig) ? Figure(size=(700, 600); fontsize) : fig
 
     axes_in_fig = [obj for obj in fig.content if obj isa Makie.Axis]
-
     if length(axes_in_fig) >= 1
         ax = axes_in_fig[1]
     else
         ax = Axis(fig[1,1];
-                 xticklabelsvisible = false,
-                 ylabel = L"\mathrm{Correlation} \; G(\tau)",
-                 ytickformat = ys -> [L"%$(round(ys[i],sigdigits=2))" for i in eachindex(ys)],
-                 xscale = log10)
+                  xlabel = L"\mathrm{Logarithmic\ lag\ time}\; \log_{10}{\tau}",
+                  ylabel = L"\mathrm{Correlation} \; G(\tau)",
+                  ytickformat = ys -> [L"%$(round(ys[i],sigdigits=2))" for i in eachindex(ys)],
+                  xscale = log10)
     end
 
     scatter!(ax, ch.τ, ch.G; markersize=10, color=color1, strokewidth=1, strokecolor=:black, alpha=0.7)
@@ -431,6 +430,41 @@ function fcs_table(model::Function, fit::LsqFit.LsqFitResult, scales::AbstractVe
         alignment = [:l, :r, :r],
         formatters = [(v,i,j)->(j ∈ (2,3) && v isa Number ? @sprintf("%.4g", v) : v)]
     )
+end
+
+"""
+    resid_acf_plot(fit; fontsize=20, fig=nothing, kwargs...)
+
+Plot the autocorrelation of residuals of a fit as a qualitative test of goodness of fit.
+
+# Arguments
+- `fit::LsqFit.LsqFitResult` — Nonlinear least-squares fit result.
+
+# Keywords
+- `fontsize::Int=20` — Base font size for the figure.
+- `fig::Union{Nothing,Makie.Figure}=nothing` — Reuse an existing figure if provided (first axis is reused).
+- `color::Symbol=:orangered2` — Color of stems.
+- `kwargs...` — Passed to `acf`.
+"""
+function resid_acf_plot(fit::LsqFit.LsqFitResult; fontsize::Int=20, 
+                        fig::Union{Nothing,Makie.Figure}=nothing, 
+                        color::Symbol=:orangered2, kwargs...)
+    ρ = acf(fit.resid; kwargs...)
+
+    fig = isnothing(fig) ? Figure(size=(700, 600); fontsize) : fig
+
+    axes_in_fig = [obj for obj in fig.content if obj isa Makie.Axis]
+    if length(axes_in_fig) >= 1
+        ax = axes_in_fig[1]
+    else
+        ax = Axis(fig[1,1];
+                  xlabel = L"\mathrm{Lag\ time}\; k",
+                  ylabel = L"\mathrm{Correlation} \; \hat{\rho}_k",
+                  ytickformat = ys -> [L"%$(round(ys[i],sigdigits=2))" for i in eachindex(ys)])
+    end
+
+    stem!(ax, 0:(length(ρ)-1), ρ; color)
+    return fig, ρ
 end
 
 """
