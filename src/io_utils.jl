@@ -9,6 +9,7 @@ const SI_PREFIXES = Dict(
     "p" => 1e12
 )
 
+
 """
     FCSChannel(name, τ, G, σ)
 
@@ -191,36 +192,32 @@ end
 
 Requires `CairoMakie` (and `LaTeXStrings` for math labels).
 """
-function _fcs_plot(args...; kwargs...)
+_fcs_plot(args...; kwargs...) =
     error("`_fcs_plot` requires CairoMakie (and LaTeXStrings). Load them: `using CairoMakie, LaTeXStrings`.")
-end
 
 """
     resid_acf_plot(resid; kwargs...) -> fig
 
 Requires `CairoMakie`. Activate by `using CairoMakie`.
 """
-function resid_acf_plot(args...; kwargs...)
+resid_acf_plot(args...; kwargs...) =
     error("`resid_acf_plot` requires CairoMakie. Load it: `using CairoMakie`.")
-end
 
 """
     fcs_table(model, fit, scales; kwargs...) -> pretty output
 
 Requires `PrettyTables`. Activate by `using PrettyTables`.
 """
-function fcs_table(args...; kwargs...)
+fcs_table(args...; kwargs...) = 
     error("`fcs_table` requires PrettyTables. Load it: `using PrettyTables`.")
-end
 
 """
     read_fcs(path; kwargs...) -> FCSData
 
 Requires `DelimitedFiles`. Activate by `using DelimitedFiles` in the session.
 """
-function read_fcs(::Any; kwargs...)
+read_fcs(::Any; kwargs...) = 
     error("`read_fcs` requires DelimitedFiles. Load it first: `using DelimitedFiles`.")
-end
 
 
 

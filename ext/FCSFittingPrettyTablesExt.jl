@@ -2,7 +2,9 @@ module FCSFittingPrettyTablesExt
 
 using PrettyTables
 using LsqFit
-import FCSFitting: sig_str, fcs_table
+import FCSFitting: sigstr, fcs_table, infer_parameter_list, 
+                   τD, parameters, errors, SI_PREFIXES, aic, 
+                   aicc, bic, bicc, chi_squared, ljung_box, ww_test
 
 
 """
