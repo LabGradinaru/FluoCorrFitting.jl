@@ -1,0 +1,22 @@
+codecov:
+  require_ci_to_pass: false
+
+coverage:
+  precision: 2
+  round: down
+  range: "70..95"
+
+status:
+  project:
+    default:
+      target: auto
+      threshold: 2%   # allow small dips
+  patch:
+    default:
+      target: auto
+      threshold: 1%
+
+ignore:
+  - "test/"
+  - "examples/"
+  - "ext/"
