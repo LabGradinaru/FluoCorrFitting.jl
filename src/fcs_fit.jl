@@ -26,14 +26,8 @@ function FCSFitResult(lsf::LsqFit.LsqFitResult, spec::FCSModelSpec, scales)
           getproperty(lsf, :wt) : nothing
 
     return FCSFitResult(
-        lsf.param,
-        lsf.resid,
-        lsf.jacobian,
-        lsf.converged,
-        lsf.trace,
-        wt,
-        spec,
-        scales,
+        lsf.param, lsf.resid, lsf.jacobian, lsf.converged, 
+        lsf.trace, wt, spec, scales,
     )
 end
 

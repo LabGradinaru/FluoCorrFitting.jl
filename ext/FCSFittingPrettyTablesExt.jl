@@ -7,8 +7,7 @@ import StatsAPI: aic, aicc, bic
 import FCSFitting: FCSFitResult, sigstr, fcs_table, infer_parameter_names, 
                    τD, SI_PREFIXES, r2
 
-# TODO: restructure and generalize here similar to how was done for fcs_plot
-# might also be nice to make a FCSFitResult struct for containing spec + fit + scales :)
+
 """
     fcs_table(fit; backend=:html, gof_metric=bic, units=nothing)
 
@@ -28,21 +27,12 @@ Prints a table with columns:
 - `"Parameters"` — Human-readable names from `infer_parameter_list(...)`,
 - `"Values"` — `parameters(fit, scales)`,
 - `"Std. Dev."` — `errors(fit, scales)`,
-
 and a source note with the chosen GoF metric.
-
-# Returns
-- The return value of `pretty_table(...)` after printing the table.
-
-# Notes
-If `diffusivity` is provided, `τ_D` is computed and inserted at the top; the simple error propagation
-assumes no uncertainty in `diffusivity`.
 """
 function fcs_table(fit::FCSFitResult; 
                    backend::Symbol=:html, gof_metric::Function=bic,
                    units::Union{Nothing, AbstractVector{String}}=nothing)
-    vals = coef(fit)
-    errs = stderror(fit)
+    vals = coef(fit);  errs = stderror(fit)
     
     # Build parameter list (names) in the same order as values
     parameter_list = infer_parameter_names(fit.spec, vals)
@@ -50,8 +40,7 @@ function fcs_table(fit::FCSFitResult;
     # Trim to the common length
     n = min(length(parameter_list), length(vals), length(errs))
     parameter_list = parameter_list[1:n]
-    vals = vals[1:n]
-    errs = errs[1:n]
+    vals = vals[1:n];  errs = errs[1:n]
 
     # argument checks for SI prefix rescaling
     (units === nothing) && (units = fill("",n))
@@ -80,20 +69,15 @@ function fcs_table(fit::FCSFitResult;
     end
 
     data = hcat(parameter_list, vals, errs)
+
     # evaluate goodness of fit metric and add it to the table
     gof_val = gof_metric(fit)
     gof_line = " $(nameof(gof_metric)) = $(sigstr(gof_val, 6)) "
 
     # PrettyTables call
-    column_labels = ["Parameters", "Values", "Std. Dev."]
-
     pretty_table(
-        data;
-        backend,
-        column_labels = column_labels,
-        source_notes = gof_line,
-        source_note_alignment = :c,
-        alignment = [:l, :r, :r],
+        data; backend, column_labels = ["Parameters", "Values", "Std. Dev."],
+        source_notes = gof_line, source_note_alignment = :c, alignment = [:l, :r, :r],
         formatters = [(v,i,j)->(j ∈ (2,3) && v isa Number ? sigstr(v, 4) : v)],
     )
 end
