@@ -1,25 +1,120 @@
 """
-    log_lags(n_points, τmin, τmax)
+    FCSFitResult{P,R,J,W,T,S}(
+        param,resid,jacobian,converged,trace,wt,spec,scales
+    )
+Container for the result of fitting with the model specified by `spec` based on `LsqFit.LsqFitResult`. 
 
-Strictly increasing integer log-spaced lags in [τmin, τmax], zero-based.
-Returns *fewer* than n_points if there aren't enough distinct integers.
+
+FCSFitResult(lsf::LsqFit.LsqFitResult, spec, scales)
+
+Wrap an `LsqFit.LsqFitResult` together with the model `spec` and `scales`
+into an `FCSFitResult` that supports `StatsAPI` methods.
 """
-function log_lags(n_points::Int, τmin::Int, τmax::Int)
-    @assert n_points ≥ 1
-    @assert 0 ≤ τmin ≤ τmax
-    # Work on [τmin+1, τmax+1] in log space, then subtract 1 to get zero-based
-    r = range(log10(τmin + 1), log10(τmax + 1); length=n_points)
-    lags = round.(Int, 10 .^ r .- 1)
-    # Clamp and enforce strict monotonicity
-    @inbounds for i in eachindex(lags)
-        lags[i] = clamp(lags[i], τmin, τmax)
-        if i > 1 && lags[i] ≤ lags[i-1]
-            lags[i] = min(lags[i-1] + 1, τmax)
-        end
-    end
-    # Drop duplicates if τ-range is too small
-    return unique(lags)
+struct FCSFitResult{P,R,J,W <: AbstractArray,T,S} <: StatsAPI.StatisticalModel
+    param::P
+    resid::R
+    jacobian::J
+    converged::Bool
+    trace::T
+    wt::W
+    spec::FCSModelSpec
+    scales::S
 end
+
+function FCSFitResult(lsf::LsqFit.LsqFitResult, spec::FCSModelSpec, scales)
+    wt = (hasproperty(lsf, :wt) && getproperty(lsf, :wt) !== nothing) ? 
+          getproperty(lsf, :wt) : nothing
+
+    return FCSFitResult(
+        lsf.param,
+        lsf.resid,
+        lsf.jacobian,
+        lsf.converged,
+        lsf.trace,
+        wt,
+        spec,
+        scales,
+    )
+end
+
+"""
+    _to_lfr(fit::FCSFitResult) -> LsqFit.LsqFitResult
+
+Convert back to an `LsqFit.LsqFitResult` to reuse routines like `stderror`.
+"""
+function _to_lfr(fit::FCSFitResult)
+    return LsqFit.LsqFitResult(
+        fit.param, fit.resid, fit.jacobian, fit.converged, fit.trace, fit.wt
+    )
+end
+
+StatsAPI.coef(ffr::FCSFitResult) = ffr.param .* ffr.scales
+StatsAPI.nobs(ffr::FCSFitResult) = length(ffr.resid)
+StatsAPI.rss(ffr::FCSFitResult) = sum(abs2, ffr.resid)
+StatsAPI.weights(ffr::FCSFitResult) = ffr.wt
+StatsAPI.residuals(ffr::FCSFitResult) = ffr.resid
+
+"""
+    StatsAPI.stderror(fit::FCSFitResult)
+
+Standard errors of **physical-space** parameters.
+"""
+StatsAPI.stderror(fit::FCSFitResult; kwargs...) =
+    LsqFit.stderror(_to_lfr(fit)) .* fit.scales
+
+"""
+    StatsAPI.dof(ffr::FCSFitResult)
+
+Residual degrees of freedom = nobs - number of free parameters.
+"""
+StatsAPI.dof(ffr::FCSFitResult) = StatsAPI.nobs(ffr) - length(ffr.param)
+
+"""
+    mse(ffr::FCSFitResult)
+
+Mean squared error based on residual DOF.
+"""
+mse(ffr::FCSFitResult) = StatsAPI.rss(ffr) / StatsAPI.dof(ffr)
+
+"""
+    isconverged(ffr::FCSFitResult)
+
+Convenience boolean flag.
+"""
+isconverged(ffr::FCSFitResult) = ffr.converged
+
+"""
+    StatsAPI.offset(ffr::FCSFitResult)
+
+Return the fitted (or fixed) offset in physical units.
+If the spec fixes the offset, use that; otherwise assume the
+offset is the second free parameter (g0 is first).
+"""
+function StatsAPI.offset(ffr::FCSFitResult)
+    spec = ffr.spec
+    # Prefer a fixed offset in the spec (if present)
+    if hasproperty(spec, :offset) && getproperty(spec, :offset) !== nothing
+        return getproperty(spec, :offset)
+    end
+    # Otherwise, interpret p[2] as the offset and scale it
+    return ffr.param[2] * ffr.scales[2]
+end
+
+function StatsAPI.loglikelihood(fit::FCSFitResult)
+    w = fit.wt
+    N = nobs(fit)
+    # Guard against pathological inputs
+    if N == 0 || any(!isfinite, fit.resid) || any(!isfinite, w) || any(≤(0), w)
+        return -Inf
+    end
+
+    # assume sample from an iid Gaussian
+    σ2 = rss(fit) / N
+    return -0.5 * (N * log(2π * σ2) + N)
+end
+
+r2(fit::FCSFitResult; variant::Symbol=:McFadden) = StatsAPI.r2(fit, variant)
+
 
 """
     build_scales_from_p0(p0; noscale_idx=Int[], zero_sub=1.0) -> (θ0, scales)
@@ -115,10 +210,10 @@ end
 
 
 """
-    fcs_fit(spec, times, data, p0) -> (fit, scales)
-    fcs_fit(spec, channel, p0) -> (fit, scales)
-    fcs_fit(model, times, data, p0) -> (fit, scales)
-    fcs_fit(model, channel, p0) -> (fit, scales)
+    fcs_fit(spec, times, data, p0) -> FCSFitResult
+    fcs_fit(spec, channel, p0) -> FCSFitResult
+    fcs_fit(model, times, data, p0) -> FCSFitResult
+    fcs_fit(model, channel, p0) -> FCSFitResult
 
 Fit FCS data, in the form of a pair of lag times and the correlation curve, 
 based on a given `FCSModel` or its specifications, `FCSModelSpec` using 
@@ -137,7 +232,7 @@ initial_parameters = [1.0, 5.0, 2e-7, 1e-7, 0.1]
 t = range(1e-7, 1e-2; length=256)
 g = model(spec, initial_parameters, t) .+ 0.02 .* randn(length(t))
 
-fit, scale = fcs_fit(spec, t, g, initial_parameters)
+fit = fcs_fit(spec, t, g, initial_parameters)
 ```
 
 # Keyword Arguments
@@ -159,52 +254,35 @@ function fcs_fit end
 
 function fcs_fit(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector, p0::AbstractVector;
                  σ::Union{Nothing,AbstractArray}=nothing, wt::Union{Nothing,AbstractArray}=nothing,
-                 scales::Union{Nothing,AbstractVector}=nothing, zero_sub::Real=1.0, 
+                 scales::Union{Nothing,AbstractVector}=nothing, zero_sub::Real=1.0,
                  lower=nothing, upper=nothing, kwargs...)
-    # basic consistency checks
+
     N = length(τ)
     N == length(data) || throw(ArgumentError("Lag times and correlation values must be of equal length."))
-    if wt !== nothing
-        length(wt) == N || throw(ArgumentError("Weights must have same size as lag times and data."))
-    end
-    if σ !== nothing
-        length(σ) == N || throw(ArgumentError("Standard deviations must have same size as lag times and data."))
-    end
+    wt === nothing || (length(wt) == N || throw(ArgumentError("Weights must match data length.")))
+    σ  === nothing || (length(σ)  == N || throw(ArgumentError("σ must match data length.")))
 
-    # prefer explicit `wt`; otherwise derive from σ; otherwise unweighted.
-    local weights = wt
-    if weights === nothing 
-        if σ !== nothing
-            weights = @. 1 / σ^2
-        else
-            weights = ones(N)
-        end
-    end
+    # prefer explicit weights; else inverse-variance from σ; else ones
+    weights = wt === nothing ? (σ === nothing ? ones(N) : @. 1 / σ^2) : wt
 
-    # Indices that should not be scaled (weights + K_dyn)
+    # build scales (protect weights & K_dyn)
     noscale_idx = infer_noscale_indices(spec, p0)
-
-    # Build scales if not provided; get normalized θ0
-    if scales === nothing
-        θ0, scales_ = build_scales_from_p0(p0; noscale_idx, zero_sub)
+    θ0, scales_ = if scales === nothing
+        build_scales_from_p0(p0; noscale_idx, zero_sub)
     else
-        length(scales) == length(p0) ||
-            throw(ArgumentError("Provided scales length mismatch."))
-        θ0 = p0 ./ scales
-        scales_ = scales
+        length(scales) == length(p0) || throw(ArgumentError("Provided scales length mismatch."))
+        (p0 ./ scales, scales)
     end
 
-    # Two-arg model for LsqFit that maps θ → p, then evaluates the generic model
     model = FCSModel(; spec, scales=scales_)
 
-    # Normalize bounds to θ-space if provided
     normalize_bounds(b) = b === nothing ? nothing :
         (length(b) == length(scales_) ? b ./ scales_ :
          throw(ArgumentError("lower/upper must have length $(length(scales_))")))
+
     lowerθ = normalize_bounds(lower)
     upperθ = normalize_bounds(upper)
 
-    # Fit
     x = collect(τ)
     fit = if (lowerθ !== nothing) && (upperθ !== nothing)
         curve_fit(model, x, data, weights, θ0; lower=lowerθ, upper=upperθ, kwargs...)
@@ -216,60 +294,19 @@ function fcs_fit(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector, p
         curve_fit(model, x, data, weights, θ0; kwargs...)
     end
 
-    return fit, scales_
+    return FCSFitResult(fit, spec, scales_)
 end
 
-fcs_fit(spec::FCSModelSpec, ch::FCSChannel, p0::AbstractVector; kwargs...) = 
+fcs_fit(spec::FCSModelSpec, ch::FCSChannel, p0::AbstractVector; kwargs...) =
     fcs_fit(spec, ch.τ, ch.G, p0; σ=ch.σ, kwargs...)
 
-function fcs_fit(m::FCSModel, τ::AbstractVector, data::AbstractVector, 
-                 p0::AbstractVector; kwargs...)
+function fcs_fit(m::FCSModel, τ::AbstractVector, data::AbstractVector, p0::AbstractVector; kwargs...)
     if m.scales === nothing
-        fit, scales = fcs_fit(m.spec, τ, data, p0; kwargs...)
-        return fit, scales
+        return fcs_fit(m.spec, τ, data, p0; kwargs...)
     else
         return fcs_fit(m.spec, τ, data, p0; scales=m.scales, kwargs...)
     end
 end
 
-fcs_fit(m::FCSModel, ch::FCSChannel, p0::AbstractVector; kwargs...) = 
+fcs_fit(m::FCSModel, ch::FCSChannel, p0::AbstractVector; kwargs...) =
     fcs_fit(m, ch.τ, ch.G, p0; σ=ch.σ, kwargs...)
-
-
-"""
-    parameters(fit, scale) -> Vector
-
-Return **physical-space** parameter estimates as `fit.param .* scale`.
-
-# Arguments
-- `fit::LsqFit.LsqFitResult` — Nonlinear least-squares fit result.
-- `scale::AbstractVector` — Multiplicative scaling vector (same length as `fit.param`).
-
-# Returns
-- `Vector{Float64}` of scaled parameters.
-"""
-parameters(fit::LsqFit.LsqFitResult, scale) = fit.param .* scale
-
-"""
-    errors(fit, scale) -> Vector
-
-Return **standard deviations** of parameters in physical units: `stderror(fit) .* scale`.
-
-# Arguments
-- `fit::LsqFit.LsqFitResult` — Nonlinear least-squares fit result.
-- `scale::AbstractVector` — Multiplicative scaling vector (same length as `fit.param`).
-
-# Returns
-- `Vector{Float64}` of scaled standard errors.
-
-# Notes
-Relies on `LsqFit.stderror`; assumes a well-posed covariance estimate.
-"""
-errors(fit::LsqFit.LsqFitResult, scale) = stderror(fit) .* scale
-
-
-# TODO: make results struct
-# struct FCSFitResults
-#     model::FCSModel
-#     fit::LsqFit.LsqFitResult
-# end

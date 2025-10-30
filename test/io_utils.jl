@@ -104,21 +104,4 @@
     @test_throws ErrorException FCSFitting.resid_acf_plot([0.1, -0.1, 0.0])
     @test_throws ErrorException FCSFitting.fcs_table(spec_for_plot, nothing, nothing)
     @test_throws ErrorException FCSFitting.read_fcs("somefile.txt")
-
-
-    # parameters / errors utilities
-    model(x, θ) = @. θ[1] * exp(-x/θ[2]) + θ[3]
-    a_true, b_true, c_true = 1.25, 4.0, 0.05
-    x = range(0, 10; length=200) |> collect
-    y = model(x, [a_true, b_true, c_true])
-
-    θ0 = [1.0, 1.0, 0.0]
-    fit = curve_fit(model, x, y, θ0)
-
-    sc = [2.0, 10.0, 0.5]
-    p_phys = parameters(fit, sc)
-    e_phys = errors(fit, sc)
-
-    @test p_phys ≈ (fit.param .* sc)
-    @test e_phys ≈ (LsqFit.stderror(fit) .* sc)
 end

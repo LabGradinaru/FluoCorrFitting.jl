@@ -38,6 +38,7 @@ Calculate the effective volume from fitted FCS parameters.
     κ > 0 || throw(ArgumentError(κ_ERROR))
     return π^(3/2) * w0^3 * κ
 end
+
 """
     area(w0)
 Calculate the area formed by the beam waist `w0`.
@@ -95,6 +96,7 @@ Estimate the **molar concentration** (in mol/L) from FCS fit parameters.
     Neff = B0 / g0
     return Neff / (AVAGADROS * volume(w0, κ) * 1000) # 1000: m^3 → L
 end
+
 """
     surface_density(w0, g0; Ks=[], ics=[0])
 
@@ -134,21 +136,17 @@ Analogue to `concentration` when the a 2d fit is performed.
 end
 
 """
-    hydrodynamic(τD, w0; T=293.0, η=1.0016e-3)
-Calculate the effective hydrodynamic radius of a molecule from its characteristic 
-diffusion time and beam waist using the Stokes-Einstein relation.
-"""
-@inline hydrodynamic(τD::Real, w0::Real; kwargs...) =
-    hydrodynamic(diffusivity(τD, w0); kwargs...)
-"""
-    hydrodynamic(D; T=293.0, η=1.0016e-3, D_err=nothing)
-Calculate the effective hydrodynamic radius of a molecule from its diffusion
-coefficient using the Stokes-Einstein relation.
+    hydrodynamic(D)
+    hydrodynamic(τD, w0)
 
-If an error in the diffusivity is provided, returns the error in Rh estimate
+Calculate the effective hydrodynamic radius of a molecule using the Stokes-Einstein relation.
+
+# Keyword Arguments
+- `T=293.0`: Temperature (in Kelvin)
+- `η=1.0016e-3`: Viscosity of water (Pa⋅s)
+- `D_err=nothing`: Error in the diffusivity. If not `nothing`, returns a Tuple, (Rh, Rh_error)
 """
-@inline function hydrodynamic(D::Real; T::Real=293.0, η=1.0016e-3, 
-                              D_err::Union{Nothing,Real}=nothing)
+@inline function hydrodynamic(D::Real; T::Real=293.0, η=1.0016e-3, D_err=nothing)
     D > 0 || throw(ArgumentError(D_ERROR))
     T > 0 || throw(ArgumentError("Temperature must be positive."))
     η > 0 || throw(ArgumentError("Viscosity must be positive."))
@@ -161,6 +159,9 @@ If an error in the diffusivity is provided, returns the error in Rh estimate
         _scale / D, _scale * D_err / D^2
     end
 end
+
+hydrodynamic(τD::Real, w0::Real; kwargs...) =
+    hydrodynamic(diffusivity(τD, w0); kwargs...)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -190,7 +191,6 @@ spec = FCSModelSpec(; dim=d3, anom=global, n_diff=2)  # 3D, one α shared across
 spec = FCSModelSpec(; dim=d3, anom=perpop, n_diff=2, offset=0.0) # α₁,α₂; fixed offset
 spec = FCSModelSpec(; dim=d3, diffusivity=5e-11, n_diff=1)  # treat τD slot as w0
 ```
-
 """
 struct FCSModelSpec{D,S,OFF,DIFF,NDIFF}
     offset::Float64
@@ -233,6 +233,7 @@ end
 
 FCSModelSpec(nt::NamedTuple) = FCSModelSpec(; nt...)
 FCSModelSpec(d::Dict) = FCSModelSpec(; (Symbol(k)=>v for (k,v) in d)...)
+
 
 Base.@kwdef mutable struct FCSModel <: Function
     spec::FCSModelSpec
@@ -439,17 +440,9 @@ _eltype(x) = x isa AbstractArray ? eltype(x) : typeof(x)
 """Handler for diffusion kernels based on which arguments are not Nothing."""
 @inline function _diff(t, κ, τ, α)
     if isnothing(κ)
-        if isnothing(α)
-            udc_2d(t, τ)
-        else
-            udc_2d(t, τ, α)
-        end
+        isnothing(α) ? udc_2d(t, τ) : udc_2d(t, τ, α)
     else
-        if isnothing(α)
-            udc_3d(t, τ, κ)
-        else
-            udc_3d(t, τ, κ, α)
-        end
+        isnothing(α) ? udc_3d(t, τ, κ) : udc_3d(t, τ, κ, α)
     end
 end
 

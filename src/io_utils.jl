@@ -140,12 +140,12 @@ end
 
 
 """
-    fcs_plot(spec, τ, g, fit, scales) -> (fig, fit, scales)    
-    fcs_plot(spec, ch, fit, scales) -> (fig, fit, scales)
-    fcs_plot(spec, τ, data, p0) -> (fig, fit, scales)
-    fcs_plot(spec, ch, p0) -> (fig, fit, scales)
-    fcs_plot(model, τ, data, p0) -> (fig, fit, scales)
-    fcs_plot(model, ch, p0) -> (fig, fit, scales)
+    fcs_plot(fit, τ, g) -> fig, fit    
+    fcs_plot(fit, ch) -> fig, fit
+    fcs_plot(spec, τ, data, p0) -> fig, fit
+    fcs_plot(spec, ch, p0) -> fig, fit
+    fcs_plot(model, τ, data, p0) -> fig, fit
+    fcs_plot(model, ch, p0) -> fig, fit
     
 Plot the autocorrelation data and its fit by the input FCSModel or FCSModelSpec. 
 Optionally, the weighted residuals between the data and fit are included as a second panel 
@@ -163,7 +163,7 @@ g = model(spec, initial_parameters, t) .+ 0.02 .* randn(length(t))
 # Organize data into a channel for easier handling
 channel = FCSChannel("sample", t, g, nothing)
 
-fig, fit, scales = fcs_plot(spec, channel, initial_parameters)
+fig, fit = fcs_plot(spec, channel, initial_parameters)
 save("corr1.png", fig)
 ```
 
@@ -178,26 +178,24 @@ save("corr1.png", fig)
 """
 function fcs_plot end
 
-function fcs_plot(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector, 
-                  fit::LsqFit.LsqFitResult, scales::AbstractVector; 
+function fcs_plot(fit::FCSFitResult, τ::AbstractVector, data::AbstractVector; 
                   residuals::Bool=true, color1=:deepskyblue3, 
                   color2=:orangered2, color3=:steelblue4, kwargs...)
     if residuals
-        _fcs_plot(spec, τ, data, fit, scales, color1, color2, color3; kwargs...)
+        _fcs_plot(fit, τ, data, color1, color2, color3; kwargs...)
     else
-        _fcs_plot(spec, τ, data, fit, scales, color1, color2; kwargs...)
+        _fcs_plot(fit, τ, data, color1, color2; kwargs...)
     end
 end
 
-function fcs_plot(spec::FCSModelSpec, ch::FCSChannel, fit::LsqFit.LsqFitResult, 
-                  scales::AbstractVector; kwargs...)
-    return fcs_plot(spec, ch.τ, ch.G, fit, scales; kwargs...)
+function fcs_plot(fit::FCSFitResult, ch::FCSChannel; kwargs...)
+    return fcs_plot(fit, ch.τ, ch.G; kwargs...)
 end
 
 function fcs_plot(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector,
                   p0::AbstractVector; kwargs...)
-    fit, scales = fcs_fit(spec, τ, data, p0; kwargs...)
-    return fcs_plot(spec, τ, data, fit, scales; kwargs...)
+    fit = fcs_fit(spec, τ, data, p0; kwargs...)
+    return fcs_plot(fit, τ, data; kwargs...)
 end
 
 fcs_plot(spec::FCSModelSpec, ch::FCSChannel, p0::AbstractVector; kwargs...) = 
@@ -205,13 +203,13 @@ fcs_plot(spec::FCSModelSpec, ch::FCSChannel, p0::AbstractVector; kwargs...) =
 
 function fcs_plot(m::FCSModel, τ::AbstractVector, data::AbstractVector, 
                   p0::AbstractVector; kwargs...)
-    fit, scales = fcs_fit(m, τ, data, p0; kwargs...)
-    return fcs_plot(m.spec, τ, data, fit, scales; kwargs...)
+    fit = fcs_fit(m, τ, data, p0; kwargs...)
+    return fcs_plot(fit, τ, data; kwargs...)
 end
 
 function fcs_plot(m::FCSModel, ch::FCSChannel, p0::AbstractVector; kwargs...)
-    fit, scales = fcs_fit(m, ch, p0; kwargs...)
-    return fcs_plot(m.spec, ch, fit, scales; kwargs...)
+    fit = fcs_fit(m, ch, p0; kwargs...)
+    return fcs_plot(fit, ch; kwargs...)
 end
 
 

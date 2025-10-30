@@ -3,7 +3,7 @@ module FCSFittingCairoMakieExt
 using CairoMakie
 using LsqFit
 using LaTeXStrings
-import FCSFitting: FCSModelSpec, FCSModel, FCSChannel, _fcs_plot, resid_acf_plot, fcs_fit, acf
+import FCSFitting: FCSModelSpec, FCSModel, FCSFitResult, _fcs_plot, resid_acf_plot, fcs_fit
 
 const CORR_NAME = L"\mathrm{Correlation}"
 const LAG_NAME = L"\mathrm{Logarithmic\ lag\ time}"
@@ -24,9 +24,8 @@ Internal method for rendering previously fitted FCS data into a figure, with opt
 """
 function _fcs_plot end
 
-function _fcs_plot(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector, 
-                   fit::LsqFit.LsqFitResult, scales::AbstractVector, color1::Symbol, 
-                   color2::Symbol, color3::Symbol; 
+function _fcs_plot(fit::FCSFitResult, τ::AbstractVector, data::AbstractVector, 
+                   color1::Symbol, color2::Symbol, color3::Symbol; 
                    fig::Union{Nothing,Makie.Figure}=nothing, kwargs...)
     # Create or reuse a figure
     fig = isnothing(fig) ? Figure(size=(700, 600); kwargs...) : fig
@@ -55,19 +54,18 @@ function _fcs_plot(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector,
              strokewidth=1, strokecolor=:black, alpha=0.7)
 
     # Generate model that fit the data and plot it
-    model = FCSModel(; spec, scales)    
+    model = FCSModel(; fit.spec, fit.scales)
     lines!(top_ax, τ, model(τ, fit.param); linewidth=3, color=color2, alpha=0.9)
 
     # Plot residuals on the bottom axis
     scatterlines!(bot_ax, τ, fit.resid; color=color3, markersize=5, strokewidth=1, alpha=0.7)
 
-    return fig, fit, scales
+    return fig, fit
 end
 
-function _fcs_plot(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector, 
-                   fit::LsqFit.LsqFitResult, scales::AbstractVector, color1::Symbol, 
-                   color2::Symbol; fig::Union{Nothing,Makie.Figure}=nothing, 
-                   kwargs...)
+function _fcs_plot(fit::FCSFitResult, τ::AbstractVector, data::AbstractVector, 
+                   color1::Symbol, color2::Symbol; 
+                   fig::Union{Nothing,Makie.Figure}=nothing, kwargs...)
     fig = isnothing(fig) ? Figure(size=(700, 600); fontsize) : fig
 
     axes_in_fig = [obj for obj in fig.content if obj isa Makie.Axis]
@@ -82,10 +80,10 @@ function _fcs_plot(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector,
 
     scatter!(ax, τ, data; markersize=10, color=color1, strokewidth=1, strokecolor=:black, alpha=0.7)
 
-    model = FCSModel(; spec, scales)    
+    model = FCSModel(; fit.spec, fit.scales)    
     lines!(top_ax, τ, model(ch.τ, fit.param); linewidth=3, color=color2, alpha=0.9)
 
-    return fig, fit, scales
+    return fig, fit
 end
 
 
@@ -103,7 +101,7 @@ Plot the autocorrelation of residuals of a fit as a qualitative test of goodness
 - `color::Symbol=:orangered2` — Color of stems.
 - `kwargs...` — Passed to `acf`.
 """
-function resid_acf_plot(fit::LsqFit.LsqFitResult; fontsize::Int=20, 
+function resid_acf_plot(fit::FCSFitResult; fontsize::Int=20, 
                         fig::Union{Nothing,Makie.Figure}=nothing, 
                         color::Symbol=:orangered2, kwargs...)
     ρ = acf(fit.resid; kwargs...)
@@ -122,6 +120,29 @@ function resid_acf_plot(fit::LsqFit.LsqFitResult; fontsize::Int=20,
 
     stem!(ax, 0:(length(ρ)-1), ρ; color)
     return fig, ρ
+end
+
+"""
+    acf(x; maxlag, demean=true, unbiased=true)
+
+Autocorrelation function up to `maxlag` (inclusive), returning ρ₀..ρ_maxlag.
+"""
+function acf(x::AbstractVector; maxlag::Int=clamp(length(x) - 1, 1, 1000),
+             demean::Bool=true, unbiased::Bool=true)
+    N = length(x)
+    @assert maxlag ≥ 1 && maxlag < N "maxlag must be in [1, N-1]"
+    μ = demean ? (sum(x)/N) : zero(eltype(x))
+    y = x .- μ
+    γ0 = sum(abs2, y) / (unbiased ? (N - 1) : N)
+
+    ρ = similar(y, maxlag + 1)
+    ρ[1] = 1
+    @inbounds for k in 1:maxlag
+        num = sum(@view(y[1:N-k]) .* @view(y[1+k:N]))
+        denom = unbiased ? (N - k) : N
+        ρ[k+1] = (num / denom) / γ0
+    end
+    return ρ
 end
 
 end #module

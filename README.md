@@ -94,7 +94,8 @@ upper_bounds = [1.1, 20.0, 1e-6, 1e-4, 0.5]
 t = range(1e-7, 1e-2; length=256)
 g = model(spec, initial_parameters, t) .+ 0.02 .* randn(length(t))
 
-fit, scale = fcs_fit(spec, t, g, initial_parameters; lower = lower_bounds, upper = upper_bounds)
+# Store output from fit in a `FCSFitResults` container
+fit = fcs_fit(spec, t, g, initial_parameters; lower = lower_bounds, upper = upper_bounds)
 println(fit)
 ```
 
@@ -106,7 +107,7 @@ If your data live in a delimited file (CSV/TSV), load `DelimitedFiles` **before*
 ```julia
 using DelimitedFiles, FCSFitting
 data = read_fcs(filepath; start_idx = 20, end_idx = 300);
-fit, scale = fcs_fit(spec, data.channel[1].τ, data.channel[1].G, initial_parameters; lower = lower_bounds, upper = upper_bounds)
+fit = fcs_fit(spec, data.channel[1].τ, data.channel[1].G, initial_parameters; lower = lower_bounds, upper = upper_bounds)
 ```
 
 
@@ -117,8 +118,8 @@ using CairoMakie, LaTeXStrings, FCSFitting
 
 channel = FCSChannel("sample", t, g, nothing)
 
-fig, fit, scales = fcs_plot(spec, channel, initial_parameters)
-save("fit.png", fig)
+fig, fit = fcs_plot(spec, channel, initial_parameters)
+save("corr1.png", fig)
 ```
 
 

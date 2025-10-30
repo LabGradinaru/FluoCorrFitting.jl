@@ -5,6 +5,7 @@ version = "0.5.1"
 
 [deps]
 LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
+StatsAPI = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
 
 [weakdeps]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
