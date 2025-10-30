@@ -113,6 +113,7 @@ function infer_noscale_indices(spec::FCSModelSpec, p0::AbstractVector)
     return idxs
 end
 
+
 """
     fcs_fit(spec, times, data, p0) -> (fit, scales)
     fcs_fit(spec, channel, p0) -> (fit, scales)
@@ -120,54 +121,48 @@ end
     fcs_fit(model, channel, p0) -> (fit, scales)
 
 Fit FCS data, in the form of a pair of lag times and the correlation curve, 
-based on a given `FCSModel` or its specifications, `FCSModelSpec`
-using `LsqFit.curve_fit`, with parameter normalization. 
+based on a given `FCSModel` or its specifications, `FCSModelSpec` using 
+`LsqFit.curve_fit`, with parameter normalization. 
 `p0` is an initial model parameter guess (see Example).
 
 # Example 
-
 ```julia
 # 3D "Brownian" diffusion with one kinetic (exponential) term and an offset.
 diffusivity   = 5e-11         # m^2/s
 offset        = 0.0
 spec = FCSModelSpec(dim = :d3, anom = :none, offset = offset, diffusivity = diffusivity)
 
-# Synthetic example parameters: [g0, n_exp_terms, τD, τ_dyn, K_dyn]
+# Synthetic example parameters and data: [g0, n_exp_terms, τD, τ_dyn, K_dyn]
 initial_parameters = [1.0, 5.0, 2e-7, 1e-7, 0.1]
-
-# t: lag‑time vector (s); g: experimental correlation values
-# Example stub (replace with real data):
 t = range(1e-7, 1e-2; length=256)
 g = model(spec, initial_parameters, t) .+ 0.02 .* randn(length(t))
 
 fit, scale = fcs_fit(spec, t, g, initial_parameters)
 ```
+
 # Keyword Arguments
 - `σ=nothing`: Standard deviation of each data point in the correlation. 
-               If no weight, `wt`, is provided, 
-
-TODO!
-
-# Notes
-
-- If `scales` is `nothing`, they are inferred from `p0` so that `θ0 ≈ ones`, while
-  *not* scaling mixture weights and K-dynamics (found via `infer_noscale_indices`).
-- If `σ` is given and `wt` is not, weights are set to `1 ./ σ.^2`. Otherwise the
-  provided `wt` is used; if both are `nothing`, the fit is unweighted.
-- Bounds (`lower`, `upper`) are given in **physical** units and internally normalized
-  to `θ`-space by dividing by `scales`.
+               If no weight, `wt`, is provided, `wt = 1 ./ σ.^2` is used
+- `wt=nothing`: Per-data point weighting. If `nothing`, each component of `data`
+                is weighted equally during the fit.
+- `scales=nothing`: Per-parameter scaling to convert to an order-1 parameter. 
+                    If `nothing`, inferred from `p0` so that `θ0 = p0 / scales ≈ ones`,
+                    while *not* scaling mixture weights
+- `zero_sub=1.0`: Scale used in the scaling vector when `p0` contains a zero
+- `lower=nothing`: Lower bound for each element of the parameter vector. If nothing, 
+                   all values are unbounded from below
+- `upper=nothing`: Upper bound for each element of the parameter vector. If nothing, 
+                   all values are unbounded from above
+- `kwargs`: Passed to `LsqFit.curve_fit`
 """
 function fcs_fit end
 
-function fcs_fit(spec::FCSModelSpec, times::AbstractVector, 
-                 data::AbstractVector, p0::AbstractVector;
-                 σ::Union{Nothing,AbstractVector}=nothing,
-                 wt::Union{Nothing,AbstractVector}=nothing,
-                 scales::Union{Nothing,AbstractVector}=nothing,
-                 zero_sub::Real=1.0, lower=nothing, upper=nothing,
-                 kwargs...)
+function fcs_fit(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector, p0::AbstractVector;
+                 σ::Union{Nothing,AbstractArray}=nothing, wt::Union{Nothing,AbstractArray}=nothing,
+                 scales::Union{Nothing,AbstractVector}=nothing, zero_sub::Real=1.0, 
+                 lower=nothing, upper=nothing, kwargs...)
     # basic consistency checks
-    N = length(times)
+    N = length(τ)
     N == length(data) || throw(ArgumentError("Lag times and correlation values must be of equal length."))
     if wt !== nothing
         length(wt) == N || throw(ArgumentError("Weights must have same size as lag times and data."))
@@ -210,7 +205,7 @@ function fcs_fit(spec::FCSModelSpec, times::AbstractVector,
     upperθ = normalize_bounds(upper)
 
     # Fit
-    x = collect(times)
+    x = collect(τ)
     fit = if (lowerθ !== nothing) && (upperθ !== nothing)
         curve_fit(model, x, data, weights, θ0; lower=lowerθ, upper=upperθ, kwargs...)
     elseif (lowerθ !== nothing)
@@ -224,20 +219,18 @@ function fcs_fit(spec::FCSModelSpec, times::AbstractVector,
     return fit, scales_
 end
 
-function fcs_fit(m::FCSModel, times::AbstractVector,
-                 data::AbstractVector, p0::AbstractVector; kwargs...)
-    # If scales are pre-attached to the model, reuse them
-    if m.scales === nothing
-        fit, scales = fcs_fit(m.spec, times, data, p0; kwargs...)
-        return fit, scales
-    else
-        # Reuse the scales in `m` and bypass auto-scaling
-        return fcs_fit(m.spec, times, data, p0; scales=m.scales, kwargs...)
-    end
-end
-
 fcs_fit(spec::FCSModelSpec, ch::FCSChannel, p0::AbstractVector; kwargs...) = 
     fcs_fit(spec, ch.τ, ch.G, p0; σ=ch.σ, kwargs...)
+
+function fcs_fit(m::FCSModel, τ::AbstractVector, data::AbstractVector, 
+                 p0::AbstractVector; kwargs...)
+    if m.scales === nothing
+        fit, scales = fcs_fit(m.spec, τ, data, p0; kwargs...)
+        return fit, scales
+    else
+        return fcs_fit(m.spec, τ, data, p0; scales=m.scales, kwargs...)
+    end
+end
 
 fcs_fit(m::FCSModel, ch::FCSChannel, p0::AbstractVector; kwargs...) = 
     fcs_fit(m, ch.τ, ch.G, p0; σ=ch.σ, kwargs...)

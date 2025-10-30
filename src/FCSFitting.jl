@@ -17,6 +17,7 @@ export FCSChannel, FCSData,
 
 using LsqFit
 
+include("data_storage.jl")
 include("models.jl")
 include("fcs_fit.jl")
 include("gof.jl")
