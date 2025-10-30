@@ -72,19 +72,19 @@ function infer_noscale_indices(spec::FCSModelSpec, p0::AbstractVector)
     idxs = Int[]
 
     idx = 2 # g0
-    isnothing(spec.offset) && (idx += 1) # offset
-    (spec.dim === d3) && (idx += 1) # κ
+    !hasoffset(spec) && (idx += 1) # offset
+    (dim(spec) === d3) && (idx += 1) # κ
 
     # 4) diffusion times (or w0 when diffusivity is fixed)
-    n = spec.n_diff
+    n = n_diff(spec)
     τ_end = idx + n - 1
     τ_end ≤ L || return idxs  # let caller fail later; here we just avoid OOB
     idx = τ_end + 1
 
     # 5) anomalous exponents
-    if spec.anom === globe
+    if anom(spec) === globe
         idx += 1
-    elseif spec.anom === perpop
+    elseif anom(spec) === perpop
         α_end = idx + n - 1
         α_end ≤ L || return idxs
         idx = α_end + 1
@@ -128,8 +128,8 @@ based on a given `FCSModel` or its specifications, `FCSModelSpec` using
 # Example 
 ```julia
 # 3D "Brownian" diffusion with one kinetic (exponential) term and an offset.
-diffusivity   = 5e-11         # m^2/s
-offset        = 0.0
+diffusivity = 5e-11         # m^2/s
+offset = 0.0
 spec = FCSModelSpec(dim = d3, anom = none, offset = offset, diffusivity = diffusivity)
 
 # Synthetic example parameters and data: [g0, n_exp_terms, τD, τ_dyn, K_dyn]
@@ -236,8 +236,39 @@ fcs_fit(m::FCSModel, ch::FCSChannel, p0::AbstractVector; kwargs...) =
     fcs_fit(m, ch.τ, ch.G, p0; σ=ch.σ, kwargs...)
 
 
+"""
+    parameters(fit, scale) -> Vector
 
-    
+Return **physical-space** parameter estimates as `fit.param .* scale`.
+
+# Arguments
+- `fit::LsqFit.LsqFitResult` — Nonlinear least-squares fit result.
+- `scale::AbstractVector` — Multiplicative scaling vector (same length as `fit.param`).
+
+# Returns
+- `Vector{Float64}` of scaled parameters.
+"""
+parameters(fit::LsqFit.LsqFitResult, scale) = fit.param .* scale
+
+"""
+    errors(fit, scale) -> Vector
+
+Return **standard deviations** of parameters in physical units: `stderror(fit) .* scale`.
+
+# Arguments
+- `fit::LsqFit.LsqFitResult` — Nonlinear least-squares fit result.
+- `scale::AbstractVector` — Multiplicative scaling vector (same length as `fit.param`).
+
+# Returns
+- `Vector{Float64}` of scaled standard errors.
+
+# Notes
+Relies on `LsqFit.stderror`; assumes a well-posed covariance estimate.
+"""
+errors(fit::LsqFit.LsqFitResult, scale) = stderror(fit) .* scale
+
+
+# TODO: make results struct
 # struct FCSFitResults
 #     model::FCSModel
 #     fit::LsqFit.LsqFitResult

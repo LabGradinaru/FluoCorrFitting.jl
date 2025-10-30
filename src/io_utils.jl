@@ -71,32 +71,33 @@ end
 function _no_dynamics_params(spec::FCSModelSpec)
     names = String[]
     push!(names, G0_NAME)
-    isnothing(spec.offset) && push!(names, OFF_NAME)
-    spec.dim === d3 && push!(names, STRUCT_NAME)
+    !hasoffset(spec) && push!(names, OFF_NAME)
+    dim(spec) === d3 && push!(names, STRUCT_NAME)
 
     # τD slots (or w0 if D fixed)
-    base_label = BEAM_NAME
-    base_unit = "[m]"
-    if isnothing(spec.diffusivity)
-        base_label = DIFFTIME_NAME
-        base_unit = "[s]"
+    n = n_diff(spec)
+    base_label = DIFFTIME_NAME
+    base_unit = "[s]"
+    if hasdiffusivity(spec)
+        base_label = BEAM_NAME
+        base_unit = "[m]"
     end
-    for i in 1:spec.n_diff
-        push!(names, spec.n_diff == 1 ? base_label*" "*base_unit : "$(base_label) $i $(base_unit)")
+    @simd for i in 1:n
+        push!(names, n == 1 ? base_label*" "*base_unit : "$(base_label) $i $(base_unit)")
     end
 
     # anomalous exponents
-    if spec.anom === globe
+    if anom(spec) === globe
         push!(names, ANOM_NAME)
-    elseif spec.anom === perpop
-        for i in 1:spec.n_diff
+    elseif anom(spec) === perpop
+        @simd for i in 1:n
             push!(names, ANOM_NAME * " $i")
         end
     end
 
-    # weights (n_diff - 1)
-    if spec.n_diff > 1
-        for i in 1:(spec.n_diff-1)
+    # weights (n - 1)
+    if n > 1
+        @simd for i in 1:(n-1)
             push!(names, DIFFFRAC_NAME * " $i")
         end
     end
@@ -111,9 +112,9 @@ Return a compact string with `s` significant digits, using scientific
 notation for very small/large magnitudes (≈ like `"%.sg"`).
 """
 function sigstr(x::Real, s::Integer=5)
-    isnan(x)  && return "NaN"
-    isinf(x)  && return x > 0 ? "Inf" : "-Inf"
-    x == 0    && return "0"
+    isnan(x) && return "NaN"
+    isinf(x) && return x > 0 ? "Inf" : "-Inf"
+    x == 0 && return "0"
 
     ax = abs(float(x))
     # Use scientific notation outside a "nice" range
@@ -245,35 +246,3 @@ Requires `DelimitedFiles`. Activate by `using DelimitedFiles` in the session.
 """
 read_fcs(::Any; kwargs...) = 
     error("`read_fcs` requires DelimitedFiles. Load it first: `using DelimitedFiles`.")
-
-
-"""
-    parameters(fit, scale) -> Vector
-
-Return **physical-space** parameter estimates as `fit.param .* scale`.
-
-# Arguments
-- `fit::LsqFit.LsqFitResult` — Nonlinear least-squares fit result.
-- `scale::AbstractVector` — Multiplicative scaling vector (same length as `fit.param`).
-
-# Returns
-- `Vector{Float64}` of scaled parameters.
-"""
-parameters(fit::LsqFit.LsqFitResult, scale) = fit.param .* scale
-
-"""
-    errors(fit, scale) -> Vector
-
-Return **standard deviations** of parameters in physical units: `stderror(fit) .* scale`.
-
-# Arguments
-- `fit::LsqFit.LsqFitResult` — Nonlinear least-squares fit result.
-- `scale::AbstractVector` — Multiplicative scaling vector (same length as `fit.param`).
-
-# Returns
-- `Vector{Float64}` of scaled standard errors.
-
-# Notes
-Relies on `LsqFit.stderror`; assumes a well-posed covariance estimate.
-"""
-errors(fit::LsqFit.LsqFitResult, scale) = stderror(fit) .* scale
