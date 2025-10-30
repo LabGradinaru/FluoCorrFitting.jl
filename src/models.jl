@@ -295,7 +295,7 @@ function _eval(spec::FCSModelSpec, t, p::AbstractVector; scales=nothing)
     # dynamic contributions to the correlation
     # TODO: as above. naively, this seems much more challenging however, since it is based on ics within FCSModelSpec
     m = _ndyn_from_len(L - (idx - 1))
-    ics = something(spec.ics, ones(Int, m))
+    ics = isempty(spec.ics) ? ones(Int, m) : spec.ics
     sum(ics) == m || throw(ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components."))
     
     τdyn = m == 0 ? Float64[] : collect(@view sp[idx:idx+m-1])
