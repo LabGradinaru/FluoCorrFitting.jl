@@ -1,7 +1,3 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Public fitting models and types
-# ─────────────────────────────────────────────────────────────────────────────
-
 @enum Dim::UInt8 d2 d3 # Spatial dimension
 @enum Scope::UInt8 none globe perpop # Scope for a variable
 

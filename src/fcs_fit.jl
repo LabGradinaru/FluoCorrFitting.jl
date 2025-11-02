@@ -1,167 +1,18 @@
 const BOLTZMANN = 1.380649e-23 # Boltzmann constant in SI units
 const AVAGADROS = 6.022141e23 # Avagadro's number in SI units
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Convenience calculators
-# ─────────────────────────────────────────────────────────────────────────────
-
-const w0_ERROR = "w0 must be positive"
-const κ_ERROR = "κ must be positive"
-const D_ERROR = "Diffusivity must be positive"
-
-"""
-    τD(D, w0)
-Convert diffusion coefficient `D` and lateral waist `w0` to the lateral diffusion time τD.
-"""
-@inline function τD(D::Real, w0::Real)
-    w0 > 0 || throw(ArgumentError(w0_ERROR))
-    D > 0 || throw(ArgumentError(D_ERROR))
-    return w0^2 / (4D)
-end
-"""
-    diffusivity(τD, w0)
-Convert diffusion time `τD` and beam waist `w0` to the diffusivity.
-"""
-@inline function diffusivity(τD::Real, w0::Real)
-    w0 > 0 || throw(ArgumentError(w0_ERROR))
-    τD > 0 || throw(ArgumentError("τD must be positive"))
-    return w0^2 / (4τD)
-end
-
-"""
-    volume(w0, κ)
-Calculate the effective volume from fitted FCS parameters.
-"""
-@inline function volume(w0::Real, κ::Real)
-    w0 > 0 || throw(ArgumentError(w0_ERROR))
-    κ > 0 || throw(ArgumentError(κ_ERROR))
-    return π^(3/2) * w0^3 * κ
-end
-
-"""
-    area(w0)
-Calculate the area formed by the beam waist `w0`.
-"""
-@inline function area(w0::Real) 
-    w0 > 0 || throw(ArgumentError(w0_ERROR))
-    return π * w0^2
-end
-
-"""
-    concentration(w0, κ, g0; Ks=[], ics=[0])
-
-Estimate the **molar concentration** (in mol/L) from FCS fit parameters.
-
-# Arguments
-- `w0::Real`: Lateral 1/e² Gaussian waist of the detection PSF (meters).
-- `κ::Real`: Axial structure factor `κ = wz / w0` (dimensionless).
-- `g0::Real`: Fitted correlation amplitude **at τ→0** (dimensionless).
-              In standard FCS models, the measured `g0` is inflated by blinking (“dark states”).
-- `Ks::AbstractVector` (keyword): Dark-state **equilibrium fractions** for the kinetic terms
-   used in the model (each in `[0,1)`), ordered exactly as in your dynamics kernel.
-- `ics::AbstractVector{Int}` (keyword): Block sizes describing how `Ks` (and their times)
-   are grouped into **independent** multiplicative blinking factors. For example,
-   `ics = [2, 1]` means the first blinking block has 2 components, the second block has 1.
-"""
-@inline function concentration(w0::Real, κ::Real, g0::Real; 
-                               Ks::AbstractVector = [],
-                               ics::AbstractVector{Int} = [0])
-    g0 > 0 || throw(ArgumentError("g0 must be positive"))
-    κ > 0 || throw(ArgumentError(κ_ERROR))
-    w0 > 0 || throw(ArgumentError(w0_ERROR))
-    all(0 .<= Ks .< 1) || throw(ArgumentError("All Ks must lie in [0,1)"))
-
-    # Validate / normalize ics
-    isempty(Ks) ?
-        (ics == [0]) || throw(ArgumentError("With Ks=[], use ics=[0]")) :
-        sum(ics) == length(Ks) || throw(ArgumentError("sum(ics) must equal length(Ks)"))
-
-    # Blink prefactor at τ→0: B(0) = ∏_blocks (1 + Σ_i n_i),  n_i = K_i/(1-K_i)
-    B0 = one(Float64)
-    idx = 1
-    for b in eachindex(ics)
-        nb = ics[b]
-        nb == 0 && continue
-
-        s = 0.0
-        @inbounds for j = 1:nb
-            K = float(Ks[idx + j - 1])
-            s += K / (1 - K)
-        end
-        B0 *= (1 + s)
-        idx += nb
-    end
-
-    Neff = B0 / g0
-    return Neff / (AVAGADROS * volume(w0, κ) * 1000) # 1000: m^3 → L
-end
-
-"""
-    surface_density(w0, g0; Ks=[], ics=[0])
-
-Estimate the **molar surface density** (in mol/m^2) from FCS fit parameters.
-Analogue to `concentration` when the a 2d fit is performed.
-"""
-@inline function surface_density(w0::Real, g0::Real; 
-                                 Ks::AbstractVector = [],
-                                 ics::AbstractVector{Int} = [0])
-    g0 > 0 || throw(ArgumentError("g0 must be positive"))
-    w0 > 0 || throw(ArgumentError(w0_ERROR))
-    all(0 .<= Ks .< 1) || throw(ArgumentError("All Ks must lie in [0,1)"))
-
-    # Validate / normalize ics
-    isempty(Ks) ?
-        (ics == [0]) || throw(ArgumentError("With Ks=[], use ics=[0]")) :
-        sum(ics) == length(Ks) || throw(ArgumentError("sum(ics) must equal length(Ks)"))
-
-    # Blink prefactor at τ→0: B(0) = ∏_blocks (1 + Σ_i n_i),  n_i = K_i/(1-K_i)
-    B0 = one(Float64)
-    idx = 1
-    for b in eachindex(ics)
-        nb = ics[b]
-        nb == 0 && continue
-
-        s = 0.0
-        @inbounds for j = 1:nb
-            K = float(Ks[idx + j - 1])
-            s += K / (1 - K)
-        end
-        B0 *= (1 + s)
-        idx += nb
-    end
-
-    Neff = B0 / g0
-    return Neff / (AVAGADROS * area(w0))
-end
-
-"""
-    hydrodynamic(D)
-    hydrodynamic(τD, w0)
-
-Calculate the effective hydrodynamic radius of a molecule using the Stokes-Einstein relation.
-
-# Keyword Arguments
-- `T=293.0`: Temperature (in Kelvin)
-- `η=1.0016e-3`: Viscosity of water (Pa⋅s)
-- `D_err=nothing`: Error in the diffusivity. If not `nothing`, returns a Tuple, (Rh, Rh_error)
-"""
-@inline function hydrodynamic(D::Real; T::Real=293.0, η=1.0016e-3, D_err=nothing)
-    D > 0 || throw(ArgumentError(D_ERROR))
-    T > 0 || throw(ArgumentError("Temperature must be positive."))
-    η > 0 || throw(ArgumentError("Viscosity must be positive."))
-    isnothing(D_err) || D_err > 0 || throw(ArgumentError("D_err must be positive if not nothing."))
-    
-    _scale = BOLTZMANN * T / (6π * η)
-    if isnothing(D_err)
-        _scale / D
-    else
-        _scale / D, _scale * D_err / D^2
-    end
-end
-
-hydrodynamic(τD::Real, w0::Real; kwargs...) =
-    hydrodynamic(diffusivity(τD, w0); kwargs...)
+const SI_PREFIXES = Dict(
+    "" => 1.0,
+    "L" => 1e1,
+    "d" => 1e1,
+    "c" => 1e2,
+    "m" => 1e3,
+    "μ" => 1e6,
+    "u" => 1e6,
+    "n" => 1e9,
+    "A" => 1e10,
+    "p" => 1e12
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -410,8 +261,7 @@ function fcs_fit(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector, p
         (length(b) == length(scales_) ? b ./ scales_ :
          throw(ArgumentError("lower/upper must have length $(length(scales_))")))
 
-    lowerθ = normalize_bounds(lower)
-    upperθ = normalize_bounds(upper)
+    lowerθ = normalize_bounds(lower);  upperθ = normalize_bounds(upper)
 
     x = collect(τ)
     fit = if (lowerθ !== nothing) && (upperθ !== nothing)
@@ -440,3 +290,172 @@ end
 
 fcs_fit(m::FCSModel, ch::FCSChannel, p0::AbstractVector; kwargs...) =
     fcs_fit(m, ch.τ, ch.G, p0; σ=ch.σ, kwargs...)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Convenience calculators
+# ─────────────────────────────────────────────────────────────────────────────
+
+PosError(x) = ArgumentError(string(x, " must be positive."))
+const w0_ERROR = PosError("w0")
+const κ_ERROR = PosError("κ")
+const D_ERROR = PosError("Diffusivity")
+
+# TODO: all of these calculations should be achievable from a `fit` object
+"""
+    τD(D, w0; scale="")
+Convert diffusion coefficient `D` and lateral waist `w0` to the lateral diffusion time τD.
+"""
+@inline function τD(D::Real, w0::Real; scale::String="")
+    w0 > 0 || throw(w0_ERROR)
+    D > 0 || throw(D_ERROR)
+    
+    diff_time = w0^2 / (4D)
+    haskey(SI_PREFIXES, scale) && (diff_time *= SI_PREFIXES[scale])
+    return diff_time
+end
+
+"""
+    diffusivity(τD, w0; scale="")
+Convert diffusion time `τD` and beam waist `w0` to the diffusivity.
+"""
+@inline function diffusivity(τD::Real, w0::Real)
+    w0 > 0 || throw(w0_ERROR)
+    τD > 0 || throw(PosError("τD"))
+    return w0^2 / (4τD)
+end
+
+"""
+    volume(w0, κ; scale="")
+Calculate the effective volume from fitted FCS parameters.
+"""
+@inline function volume(w0::Real, κ::Real; scale::String="")
+    w0 > 0 || throw(w0_ERROR)
+    κ > 0 || throw(κ_ERROR)
+
+    vol = π^(3/2) * w0^3 * κ
+    haskey(SI_PREFIXES, scale) && (vol *= SI_PREFIXES[scale]^3)
+    return vol
+end
+
+"""
+    area(w0; scale="")
+Calculate the area formed by the beam waist `w0`.
+"""
+@inline function area(w0::Real; scale::String="") 
+    w0 > 0 || throw(w0_ERROR)
+    
+    area = π * w0^2
+    haskey(SI_PREFIXES, scale) && (area *= SI_PREFIXES[scale]^2)
+    return area
+end
+
+"""
+    concentration(g0, κ, w0; Ks=[], ics=[0], scale="L")
+
+Estimate the **molar concentration** (in mol/L) from FCS fit parameters.
+
+# Arguments
+- `w0::Real`: Lateral 1/e² Gaussian waist of the detection PSF (meters).
+- `κ::Real`: Axial structure factor `κ = wz / w0` (dimensionless).
+- `g0::Real`: Fitted correlation amplitude **at τ→0** (dimensionless).
+              In standard FCS models, the measured `g0` is inflated by blinking (“dark states”).
+- `Ks::AbstractVector` (keyword): Dark-state **equilibrium fractions** for the kinetic terms
+   used in the model (each in `[0,1)`), ordered exactly as in your dynamics kernel.
+- `ics::AbstractVector{Int}` (keyword): Block sizes describing how `Ks` (and their times)
+   are grouped into **independent** multiplicative blinking factors. For example,
+   `ics = [2, 1]` means the first blinking block has 2 components, the second block has 1.
+"""
+@inline function concentration(g0::Real, κ::Real, w0::Real; Ks::AbstractVector = [],
+                               ics::AbstractVector{Int} = [0], scale::String="L")
+    g0 > 0 || throw(PosError("g0"))
+    κ > 0 || throw(κ_ERROR)
+    w0 > 0 || throw(w0_ERROR)
+    all(0 .<= Ks .< 1) || throw(ArgumentError("All Ks must lie in [0,1)"))
+
+    # Validate / normalize ics
+    isempty(Ks) ?
+        (ics == [0]) || throw(ArgumentError("With Ks=[], use ics=[0]")) :
+        sum(ics) == length(Ks) || throw(ArgumentError("sum(ics) must equal length(Ks)"))
+
+    # Blink prefactor at τ→0: B(0) = ∏_blocks (1 + Σ_i n_i),  n_i = K_i/(1-K_i)
+    B0 = one(Float64)
+    idx = 1
+    for b in eachindex(ics)
+        nb = ics[b]
+        nb == 0 && continue
+
+        s = 0.0
+        @inbounds for j = 1:nb
+            K = float(Ks[idx + j - 1])
+            s += K / (1 - K)
+        end
+        B0 *= (1 + s)
+        idx += nb
+    end
+
+    conc = B0 / (g0 * AVAGADROS * volume(w0, κ))
+    haskey(SI_PREFIXES, scale) && (conc *= SI_PREFIXES[scale]^(-3))
+    return conc
+end
+
+"""
+    surface_density(w0, g0; Ks=[], ics=[0], scale="")
+
+Estimate the **molar surface density** (in mol/m^2) from FCS fit parameters.
+Analogue to `concentration` when the a 2d fit is performed.
+"""
+@inline function surface_density(g0::Real, w0::Real; Ks::AbstractVector = [],
+                                 ics::AbstractVector{Int} = [0], scale::String="")
+    g0 > 0 || throw(PosError("g0"))
+    w0 > 0 || throw(w0_ERROR)
+    all(0 .<= Ks .< 1) || throw(ArgumentError("All Ks must lie in [0,1)"))
+
+    # Validate / normalize ics
+    isempty(Ks) ?
+        (ics == [0]) || throw(ArgumentError("With Ks=[], use ics=[0]")) :
+        sum(ics) == length(Ks) || throw(ArgumentError("sum(ics) must equal length(Ks)"))
+
+    # Blink prefactor at τ→0: B(0) = ∏_blocks (1 + Σ_i n_i),  n_i = K_i/(1-K_i)
+    B0 = one(Float64)
+    idx = 1
+    for b in eachindex(ics)
+        nb = ics[b]
+        nb == 0 && continue
+
+        s = 0.0
+        @inbounds for j = 1:nb
+            K = float(Ks[idx + j - 1])
+            s += K / (1 - K)
+        end
+        B0 *= (1 + s)
+        idx += nb
+    end
+
+    dens = B0 / (g0 * AVAGADROS * area(w0))
+    haskey(SI_PREFIXES, scale) && (dens *= SI_PREFIXES[scale]^(-2))
+    return dens
+end
+
+"""
+    hydrodynamic(D; T=293.0, η=1.0016e-3, scale="")
+    hydrodynamic(τD, w0; T=293.0, η=1.0016e-3, scale="")
+
+Calculate the effective hydrodynamic radius of a molecule using the Stokes-Einstein relation.
+
+# Keyword Arguments
+- `T=293.0`: Temperature (in Kelvin)
+- `η=1.0016e-3`: Viscosity of water (Pa⋅s)
+"""
+@inline function hydrodynamic(D::Real; T=293.0, η=1.0016e-3, scale::String="")
+    D > 0 || throw(D_ERROR)
+    T > 0 || throw(PosError("Temperature"))
+    η > 0 || throw(PosError("Viscosity"))
+
+    rh = BOLTZMANN * T / (6π * η * D)
+    haskey(SI_PREFIXES, scale) && (rh *= SI_PREFIXES[scale])
+    return rh
+end
+
+hydrodynamic(τD::Real, w0::Real; kwargs...) =
+    hydrodynamic(diffusivity(τD, w0); kwargs...)
