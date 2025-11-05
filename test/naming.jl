@@ -1,4 +1,4 @@
-@testset "io_utils" begin
+@testset "naming" begin
     # SI_PREFIXES
     @test FCSFitting.SI_PREFIXES[""]  == 1.0
     @test FCSFitting.SI_PREFIXES["d"] == 1e1
@@ -8,23 +8,6 @@
     @test FCSFitting.SI_PREFIXES["u"] == 1e6
     @test FCSFitting.SI_PREFIXES["n"] == 1e9
     @test FCSFitting.SI_PREFIXES["p"] == 1e12
-
-
-    # FCSChannel / FCSData
-    τ = collect(range(1e-6, 1e-3; length=10))
-    G = 0.02 .+ 1.0 ./ (1 .+ τ ./ 1e-4)
-    σ = fill(1e-3, length(G))
-
-    ch = FCSChannel("G[1]", τ, G, σ)
-    @test ch.name == "G[1]"
-    @test ch.τ === τ
-    @test ch.G === G
-    @test ch.σ === σ
-
-    data = FCSData([ch], Dict("sample" => "test", "note" => 123), "in-memory")
-    @test length(data.channels) == 1
-    @test data.metadata["sample"] == "test"
-    @test data.source == "in-memory"
 
 
     # Parameter name inference helpers
@@ -91,17 +74,4 @@
     @test occursin("e+6", FCSFitting.sigstr(1.23456e6, 4))
     @test occursin("e-3", FCSFitting.sigstr(9.9999e-4, 4))
     @test FCSFitting.sigstr(1.23000, 5) == "1.23"
-
-
-    # Error shims when optional extensions are not loaded
-    τp = 1e-6:1e-6:1e-4
-    Gp = 0.0 .+ 1.0 ./ (1 .+ τp ./ 1e-4)
-    chp = FCSChannel("G[1]", collect(τp), Gp, nothing)
-    spec_for_plot = FCSModelSpec(; dim=FCSFitting.d2, anom=FCSFitting.none, n_diff=1)
-
-    @test_throws ErrorException FCSFitting.fcs_plot(spec_for_plot, chp, [1.0, 0.0, 1e-3])
-    @test_throws ErrorException FCSFitting._fcs_plot(spec_for_plot, chp, [1.0, 0.0, 1e-3])
-    @test_throws ErrorException FCSFitting.resid_acf_plot([0.1, -0.1, 0.0])
-    @test_throws ErrorException FCSFitting.fcs_table(spec_for_plot, nothing, nothing)
-    @test_throws ErrorException FCSFitting.read_fcs("somefile.txt")
 end

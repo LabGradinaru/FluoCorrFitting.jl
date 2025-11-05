@@ -229,23 +229,23 @@
         @test_throws ArgumentError FCSFitting.diffusivity(τ, -1.0)
 
         # confocal volume/area
-        vol = FCSFitting.volume(w0, κ)
+        vol = FCSFitting.Veff(w0, κ)
         @test vol ≈ π^(3/2) * w0^3 * κ rtol=1e-12
-        vol_scale = FCSFitting.volume(w0, κ; scale="n")
+        vol_scale = FCSFitting.Veff(w0, κ; scale="n")
         @test vol_scale ≈ 1e27 * π^(3/2) * w0^3 * κ
-        ar = FCSFitting.area(w0)
+        ar = FCSFitting.Aeff(w0)
         @test ar ≈ π * w0^2 rtol=1e-12
-        ar_scale = FCSFitting.area(w0; scale="n")
+        ar_scale = FCSFitting.Aeff(w0; scale="n")
         @test ar_scale ≈ 1e18 * π * w0^2
 
-        @test_throws ArgumentError FCSFitting.volume(-1.0, κ)
-        @test_throws ArgumentError FCSFitting.volume(w0, -1.0)
-        @test_throws ArgumentError FCSFitting.area(-1.0)
+        @test_throws ArgumentError FCSFitting.Veff(-1.0, κ)
+        @test_throws ArgumentError FCSFitting.Veff(w0, -1.0)
+        @test_throws ArgumentError FCSFitting.Aeff(-1.0)
 
         # concentration (blinkless)
         c = FCSFitting.concentration(g0, κ, w0)
         @test c ≈ (1/g0) / (NA * vol * 1000.0)
-        c_scale = FCSFitting.concentration(g0, κ, w0; scale="")
+        c_scale = FCSFitting.concentration(g0, κ, w0; scale="m")
         @test c_scale ≈ (1/g0) / (NA * vol)
 
         @test_throws ArgumentError FCSFitting.concentration(-1.0, κ, w0)

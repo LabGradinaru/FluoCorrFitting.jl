@@ -394,7 +394,7 @@ Estimate the **molar concentration** (in mol/L) from FCS fit parameters.
     end
 
     # base concentration: mol / L
-    conc = B0 * 1e-3 / (g0 * AVAGADROS * volume(w0, κ))
+    conc = B0 * 1e-3 / (g0 * AVAGADROS * Veff(w0, κ))
     if haskey(SI_PREFIXES, scale) # mol/L → (prefix)·mol/L
         conc *= SI_PREFIXES[scale]
     end
@@ -434,7 +434,7 @@ Analogue to `concentration` when the a 2d fit is performed.
         idx += nb
     end
 
-    dens = B0 / (g0 * AVAGADROS * area(w0))
+    dens = B0 / (g0 * AVAGADROS * Aeff(w0))
     haskey(SI_PREFIXES, scale) && (dens *= SI_PREFIXES[scale]^(-2))
     return dens
 end
