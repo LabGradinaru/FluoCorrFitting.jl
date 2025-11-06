@@ -1,21 +1,21 @@
 """
-    FCSChannel{S}(name, τ, G, σ)
+    FCSChannel{T,S}(name, τ, G, σ)
 
 A single correlation **channel** for FCS data.
 
 # Fields
 - `name::String` — Channel label (e.g., `"G_DD"`, `"G_DA"`, or `"G[1]"`).
-- `τ::Vector{Float64}` — Lag times in seconds (same length as `G`).
-- `G::Vector{Float64}` — Correlation values.
+- `τ::Vector{T}` — Lag times in seconds (same length as `G`).
+- `G::Vector{T}` — Correlation values.
 - `σ::S` — Optional per-lag standard deviations (same length as `G` if present).
 
 # Notes
 All vectors are assumed to be aligned element-wise (`τ[i]` ↔ `G[i]` ↔ `σ[i]`).
 """
-struct FCSChannel{S}
-    name::String                 # e.g. "G_DD" or "G_DA"
-    τ::Vector{Float64}           # lag times (s)
-    G::Vector{Float64}           # correlation values
+struct FCSChannel{T,S}
+    name::String           # e.g. "G_DD" or "G_DA"
+    τ::Vector{T}           # lag times (s)
+    G::Vector{T}           # correlation values
     σ::S
 end
 

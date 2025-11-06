@@ -104,11 +104,9 @@ println(fit)
 
 ```julia
 using FCSFitting
-# since diffusivity is fixed in the above fit,
-# the third coefficient is the beam width
-κ = coef(fit)[2];  w0 = coef(fit)[3]
-diff_time = τD(diffusivity, w0; scale="m") # diffusion time [ms]
-confocal_volume = volume(w0, κ) # confocal volume [m^3]
+diff_time = τD(spec, fit; scale="m") # diffusion time [ms]
+confocal_volume = Veff(spec, fit; scale="n") # confocal volume [nm^3]
+conc = concentration(spec, fit; scale="n") # effective concentration in nM
 rh = hydrodynamic(diffusivity; scale="A") # hydrodynamic radius [Angstroms]
 ```
 
@@ -149,7 +147,7 @@ which returns a `Vector{String}` containing the intended argument order. In gene
 
 1. Current correlation, $G (0)$
 2. (Optional) Correlation offset, $G (\infty)$
-3. (Optional; if `dim=:d3`) Structure factor, $\kappa$
+3. (If `dim=:d3`) Structure factor, $\kappa$
 4. Characteristic diffusion times, $\tau_{D,i} = w_{0,i}^2 / 4D_i$ (OR the beam width $w_{0,i}$ if the diffusivity is provided)
 5. (If `spec.anom != :none`) Anomalous exponents, $\alpha_i$
 6. (If `spec.n_diff > 1`) Diffusion population fractions, $f_i$

@@ -10,8 +10,8 @@
 Construct an object which specifies the model for fitting `FCSModelSpec`. 
 The `D` parameter is the spatial dimension, `Dim`, which the diffusion occurs in
 and dictates the diffusion kernel which is used. The `S<:Scope` parameter dictates 
-the presence and scope of the anomalous exponent. `OFF` and `DIFF` determine 
-if offset and diffusion, respectively, are allowed to vary during fitting. 
+the presence and scope of the anomalous exponent. `OFF` and `DIFF` determine Boolean 
+types that determine if offset and diffusion, respectively, are allowed to vary during fitting. 
 `NDIFF` a type corresponding to the number of diffusive components.
 
 # Examples
@@ -22,7 +22,7 @@ spec = FCSModelSpec(; dim=d3, anom=perpop, n_diff=2, offset=0.0) # α₁,α₂; 
 spec = FCSModelSpec(; dim=d3, diffusivity=5e-11, n_diff=1)  # treat τD slot as w0
 ```
 """
-struct FCSModelSpec{D,S,OFF,DIFF,NDIFF}
+struct FCSModelSpec{D,S,OFF,DIFF,ND}
     offset::Float64
     diffusivity::Float64
     ics::Vector{Int}
@@ -33,7 +33,7 @@ dim(::FCSModelSpec{D}) where {D} = D
 anom(::FCSModelSpec{D,S}) where {D,S} = S
 hasoffset(::FCSModelSpec{D,S,OFF}) where {D,S,OFF} = OFF
 hasdiffusivity(::FCSModelSpec{D,S,OFF,DIFF}) where {D,S,OFF,DIFF} = DIFF
-n_diff(::FCSModelSpec{D,S,OFF,DIFF,NDIFF}) where {D,S,OFF,DIFF,NDIFF} = NDIFF
+n_diff(::FCSModelSpec{D,S,OFF,DIFF,Val{N}}) where {D,S,OFF,DIFF,N} = N
 
 # convenience methods for translating Symbols/ Strings to enums
 _scope_from(x) = x isa Scope ? x :
@@ -54,7 +54,7 @@ function FCSModelSpec(; dim::Dim=d3, anom::Scope=none,
 
     Dval = _dim_from(dim)
     Sval = _scope_from(anom)
-    FCSModelSpec{Dval,Sval,OFF,DIFF,N}(
+    FCSModelSpec{Dval,Sval,OFF,DIFF,Val{N}}(
         offset === nothing ? 0.0 : float(offset),
         diffusivity === nothing ? 0.0 : float(diffusivity),
         ics === nothing ? Int[] : Int.(ics)
@@ -65,12 +65,21 @@ FCSModelSpec(nt::NamedTuple) = FCSModelSpec(; nt...)
 FCSModelSpec(d::Dict) = FCSModelSpec(; (Symbol(k)=>v for (k,v) in d)...)
 
 
+"""
+    FCSModel(spec, scales)
+
+Constructs a functor that allows for two-parameter dispatch 
+to comply with standard (independent, dependent) variable form
+for optimization problems.
+"""
 Base.@kwdef mutable struct FCSModel <: Function
     spec::FCSModelSpec
     scales::Union{Nothing,AbstractVector} = nothing
 end
 (m::FCSModel)(t, p) = _eval(m.spec, t, p; scales=m.scales)
 
+
+const DYN_COMP_ERROR = ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components.")
 
 function _eval(spec::FCSModelSpec, t, p::AbstractVector; scales=nothing)
     L = length(p)
@@ -127,7 +136,7 @@ function _eval(spec::FCSModelSpec, t, p::AbstractVector; scales=nothing)
     # TODO: as above. naively, this seems much more challenging however, since it is based on ics within FCSModelSpec
     m = _ndyn_from_len(L - (idx - 1))
     ics = isempty(spec.ics) ? ones(Int, m) : spec.ics
-    sum(ics) == m || throw(ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components."))
+    sum(ics) == m || throw(DYN_COMP_ERROR)
     
     τdyn = m == 0 ? Float64[] : collect(@view sp[idx:idx+m-1])
     Kdyn = m == 0 ? Float64[] : collect(@view sp[idx+m:idx+2m-1])

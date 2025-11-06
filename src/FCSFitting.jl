@@ -10,8 +10,8 @@ export FCSChannel,
 
        τD, 
        diffusivity, 
-       volume, 
-       area, 
+       Veff, 
+       Aeff, 
        concentration, 
        surface_density, 
        hydrodynamic,
@@ -40,9 +40,10 @@ export FCSChannel,
 using LsqFit
 using StatsAPI
 
-include("FCSData.jl")
-include("models.jl")
-include("fcs_fit.jl")
-include("io_utils.jl")
+include("data_structures.jl")
+include("modeling.jl")
+include("fitting.jl")
+include("naming.jl")
+include("extensions.jl")
 
 end #module
