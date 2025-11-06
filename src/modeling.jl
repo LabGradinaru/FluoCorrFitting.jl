@@ -10,8 +10,8 @@
 Construct an object which specifies the model for fitting `FCSModelSpec`. 
 The `D` parameter is the spatial dimension, `Dim`, which the diffusion occurs in
 and dictates the diffusion kernel which is used. The `S<:Scope` parameter dictates 
-the presence and scope of the anomalous exponent. `OFF` and `DIFF` determine 
-if offset and diffusion, respectively, are allowed to vary during fitting. 
+the presence and scope of the anomalous exponent. `OFF` and `DIFF` determine Boolean 
+types that determine if offset and diffusion, respectively, are allowed to vary during fitting. 
 `NDIFF` a type corresponding to the number of diffusive components.
 
 # Examples
@@ -79,6 +79,8 @@ end
 (m::FCSModel)(t, p) = _eval(m.spec, t, p; scales=m.scales)
 
 
+const DYN_COMP_ERROR = ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components.")
+
 function _eval(spec::FCSModelSpec, t, p::AbstractVector; scales=nothing)
     L = length(p)
     isnothing(scales) && (scales = ones(L))
@@ -134,7 +136,7 @@ function _eval(spec::FCSModelSpec, t, p::AbstractVector; scales=nothing)
     # TODO: as above. naively, this seems much more challenging however, since it is based on ics within FCSModelSpec
     m = _ndyn_from_len(L - (idx - 1))
     ics = isempty(spec.ics) ? ones(Int, m) : spec.ics
-    sum(ics) == m || throw(ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components."))
+    sum(ics) == m || throw(DYN_COMP_ERROR)
     
     τdyn = m == 0 ? Float64[] : collect(@view sp[idx:idx+m-1])
     Kdyn = m == 0 ? Float64[] : collect(@view sp[idx+m:idx+2m-1])
