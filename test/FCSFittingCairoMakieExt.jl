@@ -3,8 +3,6 @@ using CairoMakie, LaTeXStrings
 CairoMakie.activate!()  # headless-friendly
 
 @testset "FCSFittingCairoMakieExt" begin
-    Random.seed!(42)
-
     # Synthetic 3D Brownian (no anomalous), one diffuser, fixed offset
     τ = 10 .^ range(-6, -1; length=300)
     g0_true = 0.9

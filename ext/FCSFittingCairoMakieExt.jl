@@ -10,7 +10,7 @@ const CORR_NAME = L"\mathrm{Correlation}"
 const LAG_NAME = L"\mathrm{Logarithmic\ lag\ time}"
 
 
-latexify_axis(x) = [L"%$(round(x[i], sigdigits=2))" for i in eachindex(x)]
+latexify_axis(x; n=1) = [L"%$(round(x[i], sigdigits=n))" for i in eachindex(x)]
 
 
 """
@@ -86,14 +86,14 @@ function _fcs_plot(fit::FCSFitResult, τ::AbstractVector, data::AbstractVector,
     return fig, fit
 end
 
-
+#TODO: this should be separated into a top level function + a low-level parser to allow kwargs to be passed to stem
 """
     resid_acf_plot(fit; fontsize=20, fig=nothing, kwargs...)
 
 Plot the autocorrelation of residuals of a fit as a qualitative test of goodness of fit.
 
 # Arguments
-- `fit::LsqFit.LsqFitResult` — Nonlinear least-squares fit result.
+- `fit::FCSFitResult` — Nonlinear least-squares fit result.
 
 # Keywords
 - `fontsize::Int=20` — Base font size for the figure.
