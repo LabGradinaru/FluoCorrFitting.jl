@@ -27,12 +27,12 @@ function _fcs_plot(
     residuals::Bool = true,
     colors::NamedTuple = (data = :deepskyblue3, fit = :orangered2, resid = :steelblue4),
     fig::Union{Nothing,Makie.Figure} = nothing,
-    figure_kwargs::NamedTuple = (fontsize=20,),
+    figure_kw::NamedTuple = (fontsize=20,),
     data_kw::NamedTuple = NamedTuple(),
     fit_kw::NamedTuple = NamedTuple(),
     resid_kw::NamedTuple = NamedTuple(),
 )
-    fig = isnothing(fig) ? Figure(; figure_kwargs...) : fig
+    fig = isnothing(fig) ? Figure(; figure_kw...) : fig
     ax_top, ax_bot = _get_axes!(fig; residuals)
 
     # sensible defaults, user can override via *_kw
@@ -57,6 +57,8 @@ end
 function _get_axes!(fig::Makie.Figure; residuals::Bool)
     axes_in_fig = [obj for obj in fig.content if obj isa Makie.Axis]
 
+    dims = fig.scene.viewport[].widths
+
     if residuals
         if length(axes_in_fig) >= 2
             return axes_in_fig[1], axes_in_fig[2]
@@ -66,7 +68,7 @@ function _get_axes!(fig::Makie.Figure; residuals::Bool)
             ylabel = CORR_NAME,
             xscale = log10,
             ytickformat = ys -> latexify_axis(ys),
-            height = 400, width = 600,
+            height = 4*dims[2]/7, width = 5*dims[1]/6,
         )
         bot_ax = Axis(fig[2, 1];
             xlabel = LAG_NAME,
@@ -74,7 +76,7 @@ function _get_axes!(fig::Makie.Figure; residuals::Bool)
             xscale = log10,
             xtickformat = xs -> latexify_log10(xs),
             ytickformat = ys -> latexify_axis(ys),
-            height = 120, width = 600,
+            height = dims[2]/7, width = 5*dims[1]/6,
         )
         return top_ax, bot_ax
     else
@@ -106,11 +108,11 @@ Internal method for rendering the autocorrelation of the residuals of a fit resu
 function _resid_acf_plot(
     ρ::AbstractVector, N::Int;
     fig::Union{Nothing,Makie.Figure}=nothing,
-    figure_kwargs::NamedTuple = (fontsize=20,),
+    figure_kw::NamedTuple = (fontsize=20,),
     stem_kw::NamedTuple = NamedTuple(),
     hline_kw::NamedTuple = NamedTuple(),
 )
-    fig = isnothing(fig) ? Figure(; figure_kwargs...) : fig
+    fig = isnothing(fig) ? Figure(; figure_kw...) : fig
 
     axes_in_fig = [obj for obj in fig.content if obj isa Makie.Axis]
     ax = !isempty(axes_in_fig) ? axes_in_fig[1] :
@@ -123,7 +125,7 @@ function _resid_acf_plot(
 
     stem!(ax, 0:(length(ρ)-1), ρ; stem_kw...)
     conf = 2 / sqrt(N)
-    hlines!(ax, [conf, -conf]; hline_kw...)
+    hlines!(ax, [conf, -conf]; merge(hline_kw, (xmax=length(ρ)-1,))...)
     return fig
 end
 

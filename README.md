@@ -82,7 +82,7 @@ upper_bounds = [1.1, 20.0, 1e-6, 1e-4, 0.5]
 
 # t: lag‑time vector (s); g: experimental correlation values
 # Example stub (replace with real data):
-t = range(1e-7, 1e-2; length=256)
+t = range(1e-7, 1e-1; length=256)
 g = model(spec, initial_parameters, t) .+ 0.02 .* randn(length(t))
 
 # Store output from fit in a `FCSFitResults` container

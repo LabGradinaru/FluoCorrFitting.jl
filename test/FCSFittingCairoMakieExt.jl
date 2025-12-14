@@ -48,7 +48,7 @@ CairoMakie.activate!()  # headless-friendly
     end
 
     @testset "_resid_acf_plot" begin
-        fig = FCSFitting._resid_acf_plot(randn(100), 200; figure_kwargs=(fontsize=16,))
+        fig = FCSFitting._resid_acf_plot(randn(100), 200; figure_kw=(fontsize=16,))
         @test fig isa Makie.Figure
     end
 end
