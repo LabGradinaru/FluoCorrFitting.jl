@@ -1,3 +1,5 @@
+const DYN_COMP_ERROR = ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components.")
+
 @enum Dim::UInt8 d2 d3 # Spatial dimension
 @enum Scope::UInt8 none globe perpop # Scope for a variable
 
@@ -17,7 +19,7 @@ types that determine if offset and diffusion, respectively, are allowed to vary 
 # Examples
 ```julia
 spec = FCSModelSpec(; dim=d2, anom=none, n_diff=1)  # 2D, normal diffusion, one diffuser
-spec = FCSModelSpec(; dim=d3, anom=global, n_diff=2)  # 3D, one α shared across 2 diffusers
+spec = FCSModelSpec(; dim=d3, anom=globe, n_diff=2)  # 3D, one α shared across 2 diffusers
 spec = FCSModelSpec(; dim=d3, anom=perpop, n_diff=2, offset=0.0) # α₁,α₂; fixed offset
 spec = FCSModelSpec(; dim=d3, diffusivity=5e-11, n_diff=1)  # treat τD slot as w0
 ```
@@ -78,8 +80,6 @@ Base.@kwdef mutable struct FCSModel <: Function
 end
 (m::FCSModel)(t, p) = _eval(m.spec, t, p; scales=m.scales)
 
-
-const DYN_COMP_ERROR = ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components.")
 
 function _eval(spec::FCSModelSpec, t, p::AbstractVector; scales=nothing)
     L = length(p)
