@@ -1,5 +1,5 @@
 @testset "fitting" begin
-    @testset "FCSFitResult constructor + _to_lfr + StatsAPI shims" begin
+    @testset "FCSFitResult constructor + StatsAPI shims" begin
         exp_model(x, θ) = @. θ[1] * exp(-x/θ[2]) + θ[3]
 
         a_true, b_true, c_true = 1.25, 3.2, 0.08
@@ -43,6 +43,9 @@
         lsf_better = curve_fit(exp_model, x, y, wt, [a_true, b_true, c_true])
         ffr_better = FCSFitResult(lsf_better, spec_free, scales)
         @test StatsAPI.loglikelihood(ffr_better) >= StatsAPI.loglikelihood(ffr)
+        @test StatsAPI.aic(ffr_better) <= StatsAPI.aic(ffr)
+        @test StatsAPI.aicc(ffr_better) <= StatsAPI.aicc(ffr)
+        @test StatsAPI.bic(ffr_better) <= StatsAPI.bic(ffr)
     end
 
     @testset "build_scales_from_p0 + build_scales" begin
@@ -94,11 +97,11 @@
         spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d2, anom=FCSFitting.none, n_diff=1)
 
         # Generate noiseless data with the generalized model
-        model = FCSFitting.FCSModel(; spec)
+        p0 = [0.5, 0.0, 5e-4]   # rough initial guesses
+        model = FCSFitting.FCSModel(spec, τ, p0)
         y = model(τ, [g0_true, offset_true, τD_true])
 
-        # --- Fit without bounds
-        p0 = [0.5, 0.0, 5e-4]   # rough initial guesses
+        # Fit without bounds
         fit = FCSFitting.fcs_fit(spec, τ, y, p0)
         p̂ = coef(fit)
 
@@ -106,7 +109,7 @@
         @test p̂[2] ≈ offset_true rtol=1e-5
         @test p̂[3] ≈ τD_true rtol=1e-5
 
-        # --- Fit with bounds (make g0 lower bound larger than truth)
+        # Fit with bounds (make g0 lower bound larger than truth)
         p02 = [1.5, 0.0, 5e-4]
         lower = [1.0, -1e-1, 0.0]
         upper = [2.0, 1e-1, 1e-2]
@@ -131,11 +134,13 @@
         # Model spec: 3D, Brownian, two diffusers, fixed offset
         spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d3, anom=FCSFitting.none, n_diff=2, offset=0.0)
 
-        model = FCSFitting.FCSModel(; spec)
+        p0 = [0.5, 5, 5e-4, 5e-5, 0.5, 5e-7, 0.25]
+        model = FCSFitting.FCSModel(spec, τ, p0)
         y = model(τ, [g0_true, κ_true, τD1_true, τD2_true, wt1_true, τdyn_true, Kdyn_true])
 
-        p0 = [0.5, 5, 5e-4, 5e-5, 0.5, 5e-7, 0.25]
-        fit = FCSFitting.fcs_fit(spec, τ, y, p0)
+        # Fit with only lower bound
+        lower = zeros(7)
+        fit = FCSFitting.fcs_fit(spec, τ, y, p0; lower)
         p̂ = coef(fit)
 
         @test p̂[1] ≈ g0_true atol=1e-2*g0_true
@@ -149,27 +154,31 @@
 
     @testset "weights vs σ equivalence (heteroscedastic)" begin
         τ = 10 .^ range(-6, -1; length=300)
-        g0_true = 0.9
+        g0_true = rand()
         offset_true = 2e-3
         τD_true = 8e-4
 
         spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d2, anom=FCSFitting.none, n_diff=1)
-        model = FCSFitting.FCSModel(; spec)
+        
+        p0 = [0.5, 0.0, 1e-3]
+        model = FCSFitting.FCSModel(spec, τ, p0)
         y_true = model(τ, [g0_true, offset_true, τD_true])
 
         # Heteroscedastic noise
         σ = @. 0.002 + 0.003 * (τ / maximum(τ))
         y = y_true .+ σ .* randn(length(τ))
 
-        p0 = [1.0, 0.0, 1e-3]
+        ch = FCSChannel("G1", τ, y, σ)
+
+        upper = [1, 1e-2, 1e-2]
 
         # Using σ (internally converted to 1/σ²)
-        fitA = FCSFitting.fcs_fit(spec, τ, y, p0; σ=σ)
+        fitA = FCSFitting.fcs_fit(spec, ch, p0; upper)
         pA = coef(fitA)
 
         # Using explicit weights
         wt = @. 1 / σ^2
-        fitB = FCSFitting.fcs_fit(spec, τ, y, p0; wt=wt)
+        fitB = FCSFitting.fcs_fit(spec, ch, p0; wt=wt, upper)
         pB = pA = coef(fitB)
 
         @test pA ≈ pB rtol=1e-4
@@ -188,278 +197,20 @@
 
         # Spec: 2D, Brownian, single diffuser, fixed offset & fixed D (so p = [g0, w0])
         spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d2, anom=FCSFitting.none, n_diff=1, offset=off_fixed, diffusivity=D)
-        model = FCSFitting.FCSModel(; spec)
+        p0 = [0.001, 2e-9]
+        model = FCSFitting.FCSModel(spec, τ, p0)
         y = model(τ, [g0_true, w0_true])
 
         # Initial guesses & bounds
-        p0 = [0.001, 2e-9]
         lower = [0.0, 0.0]
         upper = [1.0, 500e-9]
 
-        fit = FCSFitting.fcs_fit(model, τ, y, p0; lower=lower, upper=upper)
+        fit = FCSFitting.fcs_fit(spec, τ, y, p0; lower=lower, upper=upper)
         p̂ = coef(fit)
         g0o, w0o = p̂
 
         @test g0o ≈ g0_true rtol=1e-4
         @test w0o ≈ w0_true rtol=1e-4
         @test FCSFitting.τD(D, w0o) ≈ τD_true rtol=1e-4
-    end
-
-    NA = FCSFitting.AVAGADROS
-    kB = FCSFitting.BOLTZMANN
-
-    # TODO: write tests for new calculations from `spec` and `fit`!
-    @testset "Calculators (base)" begin
-        D = 5e-11
-        w0 = 250e-9
-        κ = 10 * rand()
-        g0 = rand()
-        Ks = [0.1, 0.2]
-
-        # τD and diffusivity
-        τ = FCSFitting.τD(D, w0)
-        @test τ ≈ (w0^2) / (4D)
-        τ_scale = FCSFitting.τD(D, w0; scale="μ")
-        @test τ_scale ≈ 1e6 * (w0^2) / (4D)
-        D_back = FCSFitting.diffusivity(τ, w0)
-        @test D_back ≈ D
-
-        @test_throws ArgumentError FCSFitting.τD(-1.0, w0)
-        @test_throws ArgumentError FCSFitting.τD(D, -1.0)
-        @test_throws ArgumentError FCSFitting.diffusivity(-1.0, w0)
-        @test_throws ArgumentError FCSFitting.diffusivity(τ, -1.0)
-
-        # confocal volume/area
-        vol = FCSFitting.Veff(w0, κ)
-        @test vol ≈ π^(3/2) * w0^3 * κ rtol=1e-12
-        vol_scale = FCSFitting.Veff(w0, κ; scale="n")
-        @test vol_scale ≈ 1e27 * π^(3/2) * w0^3 * κ
-        ar = FCSFitting.Aeff(w0)
-        @test ar ≈ π * w0^2 rtol=1e-12
-        ar_scale = FCSFitting.Aeff(w0; scale="n")
-        @test ar_scale ≈ 1e18 * π * w0^2
-
-        @test_throws ArgumentError FCSFitting.Veff(-1.0, κ)
-        @test_throws ArgumentError FCSFitting.Veff(w0, -1.0)
-        @test_throws ArgumentError FCSFitting.Aeff(-1.0)
-
-        # concentration (blinkless)
-        c = FCSFitting.concentration(g0, κ, w0)
-        @test c ≈ (1/g0) / (NA * vol * 1000.0)
-        c_scale = FCSFitting.concentration(g0, κ, w0; scale="m")
-        @test c_scale ≈ (1/g0) / (NA * vol)
-
-        @test_throws ArgumentError FCSFitting.concentration(-1.0, κ, w0)
-        @test_throws ArgumentError FCSFitting.concentration(g0, -1.0, w0)
-        @test_throws ArgumentError FCSFitting.concentration(g0, κ, -1.0)
-        @test_throws ArgumentError FCSFitting.concentration(g0, κ, w0; Ks=[-0.1])
-        @test_throws ArgumentError FCSFitting.concentration(g0, κ, w0; Ks=[0.1,0.2], ics=[1])
-        @test_throws ArgumentError FCSFitting.concentration(g0, κ, w0; Ks=[], ics=[1])
-
-        B0 = 1 + (0.1/0.9 + 0.2/0.8)
-        Neff1 = B0 / g0
-        c_expected = Neff1 / (NA * vol * 1000.0)
-        @test FCSFitting.concentration(g0, κ, w0; Ks=Ks, ics=[2]) ≈ c_expected
-
-        B0 = (1 + 0.1/0.9) * (1 + 0.2/0.8)
-        Neff2 = B0 / g0
-        c_expected = Neff2 / (NA * vol * 1000.0)
-        @test FCSFitting.concentration(g0, κ, w0; Ks=Ks, ics=[1,1]) ≈ c_expected
-
-        # surface density (2D analogue)
-        sa = FCSFitting.surface_density(g0, w0)
-        sa_expected = (1/g0) / (NA * ar)
-        @test sa ≈ sa_expected rtol=1e-12
-
-        @test_throws ArgumentError FCSFitting.surface_density(-1.0, w0)
-        @test_throws ArgumentError FCSFitting.surface_density(g0, -1.0)
-        @test_throws ArgumentError FCSFitting.surface_density(g0, w0; Ks=[-0.1])
-        @test_throws ArgumentError FCSFitting.surface_density(g0, w0; Ks=[0.1,0.2], ics=[1])
-        @test_throws ArgumentError FCSFitting.surface_density(g0, w0; Ks=[], ics=[1])
-
-        sa_expected = Neff1 / (NA * ar)
-        @test FCSFitting.surface_density(g0, w0; Ks=Ks, ics=[2]) ≈ sa_expected
-        sa_expected = Neff2 / (NA * ar)
-        @test FCSFitting.surface_density(g0, w0; Ks=Ks, ics=[1,1]) ≈ sa_expected
-
-        # hydrodynamic radius
-        T = 293.0;  η = 1.0016e-3
-        Rh = FCSFitting.hydrodynamic(D; T=T, η=η)
-        @test Rh ≈ kB * T / (6π * η * D)
-        Rh_scale = FCSFitting.hydrodynamic(D; T=T, η=η, scale="A")
-        @test Rh_scale ≈ 1e10 * kB * T / (6π * η * D)
-
-        @test_throws ArgumentError FCSFitting.hydrodynamic(-1.0; T=T, η=η)
-        @test_throws ArgumentError FCSFitting.hydrodynamic(D; T=-1.0, η=η)
-        @test_throws ArgumentError FCSFitting.hydrodynamic(D; T=T, η=-1.0)
-    end
-
-    @testset "Calculators (from spec+fit)" begin
-        D = 1e-10 * rand()
-        w0 = 500e-9 * rand()
-        κ = 10*rand()
-        g0 = rand()
-        τ = 10 .^ range(-6, 0; length=300)
-
-        # ------------------------------------------------------------
-        # 3D, fixed diffusivity, one diffuser → params = [g0, κ, w0]
-        # ------------------------------------------------------------
-        spec3 = FCSFitting.FCSModelSpec(;
-            dim = FCSFitting.d3,
-            anom = FCSFitting.none,
-            offset = 0.0,
-            diffusivity = D,
-            n_diff = 1,
-        )
-        model3 = FCSFitting.FCSModel(; spec = spec3)
-        y3_true = model3(τ, [g0, κ, w0])
-
-        p0_3 = [0.5, 5, 250e-9]
-        fit3 = FCSFitting.fcs_fit(spec3, τ, y3_true, p0_3)
-
-        τD_expected = FCSFitting.τD(D, w0)
-        @test FCSFitting.τD(spec3, fit3) ≈ τD_expected rtol=1e-6
-        @test FCSFitting.τD(spec3, fit3; scale="μ") ≈ 1e6 * τD_expected rtol=1e-6
-
-        @test FCSFitting.diffusivity(spec3) ≈ D rtol=1e-12
-        @test FCSFitting.diffusivity(spec3; scale="μ") ≈ 1e12 * D rtol=1e-12
-
-        V_expected = FCSFitting.Veff(w0, κ)
-        @test FCSFitting.Veff(spec3, fit3) ≈ V_expected rtol=1e-6
-        @test FCSFitting.Veff(spec3, fit3; scale="n") ≈ 1e27 * V_expected rtol=1e-6
-
-        c_expected = FCSFitting.concentration(g0, κ, w0)
-        @test FCSFitting.concentration(spec3, fit3; scale="L") ≈ c_expected rtol=1e-6
-        @test FCSFitting.concentration(spec3, fit3; scale="n") ≈ 1e9 * c_expected rtol=1e-6
-        @test_throws ArgumentError FCSFitting.concentration(spec3, fit3; nd=2) # more diffusers than allowed
-        @test_throws ArgumentError FCSFitting.concentration(spec3, fit3; nd=0) # fewer diffusers than allowed
-
-        # ------------------------------------------------------------
-        # 2D, fixed diffusivity, one diffuser → params = [g0, w0]
-        # ------------------------------------------------------------
-        spec2_fixed = FCSFitting.FCSModelSpec(;
-            dim = FCSFitting.d2,
-            anom = FCSFitting.none,
-            offset = 0.0,
-            diffusivity = D,
-            n_diff = 1,
-        )
-        model2_fixed = FCSFitting.FCSModel(; spec = spec2_fixed)
-        y2_fixed_true = model2_fixed(τ, [g0, w0])
-
-        p0_2f = [0.5, 250e-9]
-        fit2_fixed = FCSFitting.fcs_fit(spec2_fixed, τ, y2_fixed_true, p0_2f)
-
-        ar = FCSFitting.Aeff(w0)
-        sa_expected = (1/g0) / (NA * ar)
-        sa_from_fit = FCSFitting.surface_density(spec2_fixed, fit2_fixed)
-        @test sa_from_fit ≈ sa_expected rtol=1e-6
-
-        # ------------------------------------------------------------
-        # 2D, *free* diffusivity, one diffuser → params = [g0, τD]
-        # ------------------------------------------------------------
-        τD_true = 1e-3*rand()
-        spec2_free = FCSFitting.FCSModelSpec(;
-            dim = FCSFitting.d2,
-            anom = FCSFitting.none,
-            offset = 0.0,
-            n_diff = 1,
-        )
-        model2_free = FCSFitting.FCSModel(; spec = spec2_free)
-        y2_free_true = model2_free(τ, [g0, τD_true])
-
-        p0_2free = [0.3, τD_true*0.8]
-        fit2_free = FCSFitting.fcs_fit(spec2_free, τ, y2_free_true, p0_2free)
-
-        # calling without w0 should error
-        @test_throws ArgumentError FCSFitting.surface_density(spec2_free, fit2_free)
-        @test_throws ArgumentError FCSFitting.diffusivity(spec2_free, fit2_free)
-
-        sa_from_free = FCSFitting.surface_density(spec2_free, fit2_free; w0 = w0)
-        @test sa_from_free ≈ sa_expected rtol=1e-6
-        
-        diff_from_free = FCSFitting.diffusivity(spec2_free, fit2_free; w0 = w0)
-        @test diff_from_free ≈ w0^2 / (4τD_true)
-
-        τD_from_2free = FCSFitting.τD(spec2_free, fit2_free)
-        @test τD_from_2free ≈ τD_true rtol=1e-10
-
-        # ------------------------------------------------------------
-        # 3D, fixed diffusivity, 2 diffusers, GLOBAL anomalous exponent
-        # params = [g0, κ, w01, w02, α, w1]
-        # ------------------------------------------------------------
-        w01 = 300e-9
-        w02 = 700e-9
-        α = rand()
-        w1 = 0.5*rand()
-        spec3_glob = FCSFitting.FCSModelSpec(;
-            dim = FCSFitting.d3,
-            anom = FCSFitting.globe,
-            offset = 0.0,
-            diffusivity = D,
-            n_diff = 2,
-        )
-        model3_glob = FCSFitting.FCSModel(; spec = spec3_glob)
-        y3_glob_true = model3_glob(τ, [g0, κ, w01, w02, α, w1])
-        p0_glob = [0.5, 5, w01, w02, 0.5, 0.25]
-        lower_glob = [0, 0, 250e-9, 650e-9, 0, 0]
-        upper_glob = [1, 10, 350e-9, 750e-9, 1, 0.5]
-        fit3_glob = FCSFitting.fcs_fit(spec3_glob, τ, y3_glob_true, p0_glob; lower=lower_glob, upper=upper_glob)
-
-        # τD for first and second diffuser should match their w0 slots
-        τD1_exp = FCSFitting.τD(D, w01)
-        τD2_exp = FCSFitting.τD(D, w02)
-        @test FCSFitting.τD(spec3_glob, fit3_glob; nd=1) ≈ τD1_exp rtol=1e-6
-        @test FCSFitting.τD(spec3_glob, fit3_glob; nd=2) ≈ τD2_exp rtol=1e-6
-        @test_throws ArgumentError FCSFitting.τD(spec3_glob, fit3_glob; nd=3)
-
-        # concentration for nd=2 should also work
-        c2_exp = FCSFitting.concentration(g0, κ, w02)
-        @test FCSFitting.concentration(spec3_glob, fit3_glob; nd=2) ≈ c2_exp rtol=1e-6
-
-        # ------------------------------------------------------------
-        # 3D, fixed diffusivity, 2 diffusers, PER-POP anomalous exponents
-        # params = [g0, κ, w01, w02, α1, α2, w1]
-        # ------------------------------------------------------------
-        α1 = rand()
-        α2 = rand()+1
-        spec3_perpop = FCSFitting.FCSModelSpec(;
-            dim = FCSFitting.d3,
-            anom = FCSFitting.perpop,
-            offset = 0.0,
-            diffusivity = D,
-            n_diff = 2,
-        )
-        τ = 10 .^ range(-7, 0; length=400)
-        model3_perpop = FCSFitting.FCSModel(; spec = spec3_perpop)
-        y3_perpop_true = model3_perpop(τ, [g0, κ, w01, w02, α1, α2, w1])
-        p0_perpop = [0.55, 5, w01, w02, 0.5, 1.5, 0.25]
-        lower_perpop = [0, 0, 250e-9, 650e-9, 0, 1, 0]
-        upper_perpop = [1, 10, 350e-9, 750e-9, 1, 2, 1]
-        fit3_perpop = FCSFitting.fcs_fit(spec3_perpop, τ, y3_perpop_true, p0_perpop; lower=lower_perpop, upper=upper_perpop)
-        
-        @test FCSFitting.τD(spec3_perpop, fit3_perpop; nd=1) ≈ τD1_exp rtol=1e-6
-        @test FCSFitting.τD(spec3_perpop, fit3_perpop; nd=2) ≈ τD2_exp rtol=1e-6
-
-        # concentration still well-defined
-        @test FCSFitting.concentration(spec3_perpop, fit3_perpop; nd=1) ≈ FCSFitting.concentration(g0, κ, w01) rtol=1e-6
-
-        # ------------------------------------------------------------
-        # 2D, fixed diffusivity, anomalous (global)
-        # just make sure surface_density still works
-        # ------------------------------------------------------------
-        spec2_anom = FCSFitting.FCSModelSpec(;
-            dim = FCSFitting.d2,
-            anom = FCSFitting.globe,
-            offset = 0.0,
-            diffusivity = D,
-            n_diff = 1,
-        )
-        model2_anom = FCSFitting.FCSModel(; spec = spec2_anom)
-        y2_anom_true = model2_anom(τ, [g0, w0, 0.85])  # [g0, w0, α]
-        p0_2anom = [0.4, w0*1.1, 0.9]
-        fit2_anom = FCSFitting.fcs_fit(spec2_anom, τ, y2_anom_true, p0_2anom)
-
-        @test FCSFitting.surface_density(spec2_anom, fit2_anom) ≈ sa_expected rtol=1e-6
     end
 end

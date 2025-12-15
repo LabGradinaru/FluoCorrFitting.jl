@@ -6,15 +6,7 @@ export FCSChannel,
        Dim, 
        Scope,
        FCSModelSpec,
-       FCSModel,
 
-       τD, 
-       diffusivity, 
-       Veff, 
-       Aeff, 
-       concentration, 
-       surface_density, 
-       hydrodynamic,
        FCSFitResult,
        coef,
        dof,
@@ -27,6 +19,14 @@ export FCSChannel,
        aic,
        aicc,
        bic,
+
+       τD, 
+       diffusivity, 
+       Veff, 
+       Aeff, 
+       concentration, 
+       surface_density, 
+       hydrodynamic,
 
        fcs_fit,
 
@@ -41,8 +41,9 @@ using LsqFit
 using StatsAPI
 
 include("data_structures.jl")
-include("modeling.jl")
+include("modelling.jl")
 include("fitting.jl")
+include("calculators.jl")
 include("naming.jl")
 include("extensions.jl")
 
