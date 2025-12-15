@@ -3,8 +3,6 @@
     fcs_plot(fit, ch) -> fig, fit
     fcs_plot(spec, τ, data, p0) -> fig, fit
     fcs_plot(spec, ch, p0) -> fig, fit
-    fcs_plot(model, τ, data, p0) -> fig, fit
-    fcs_plot(model, ch, p0) -> fig, fit
     
 Plot autocorrelation data and a fitted curve. Optionally include a residuals panel.
 
@@ -64,26 +62,6 @@ function fcs_plot(spec::FCSModelSpec, ch::FCSChannel, p0::AbstractVector;
                   kwargs...)
     kw = merge(isnothing(ch.σ) ? NamedTuple() : (σ = ch.σ,), fit_kwargs)
     return fcs_plot(spec, ch.τ, ch.G, p0; fit_kwargs = kw, plot_kwargs, kwargs...)
-end
-
-function fcs_plot(m::FCSModel, τ::AbstractVector, data::AbstractVector, p0::AbstractVector;
-                  fit_kwargs::NamedTuple = NamedTuple(),
-                  plot_kwargs::NamedTuple = NamedTuple(),
-                  residuals::Bool = true,
-                  colors = DEFAULT_FCS_PLOT_COLORS,
-                  color1 = nothing, color2 = nothing,
-                  color3 = nothing, fig = nothing)
-    fit = fcs_fit(m, τ, data, p0; fit_kwargs...)
-    return fcs_plot(fit, τ, data; residuals, colors, color1, color2, color3, fig, plot_kwargs)
-end
-
-function fcs_plot(m::FCSModel, ch::FCSChannel, p0::AbstractVector;
-                  fit_kwargs::NamedTuple = NamedTuple(),
-                  plot_kwargs::NamedTuple = NamedTuple(),
-                  kwargs...)
-    kw = merge(_maybe_sigma_kwargs(ch), fit_kwargs)
-    fit = fcs_fit(m, ch, p0; kw...)
-    return fcs_plot(fit, ch; plot_kwargs, kwargs...)
 end
 
 _fcs_plot(args...; kwargs...) =

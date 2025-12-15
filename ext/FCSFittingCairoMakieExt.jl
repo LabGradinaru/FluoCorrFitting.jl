@@ -43,7 +43,7 @@ function _fcs_plot(
     scatter!(ax_top, τ, data; merge(data_defaults, data_kw)...)
 
     # Generate model curve from fit
-    model = FCSModel(fit.spec, fit.scales)
+    model = FCSModel(fit.spec, τ, fit.param; fit.scales)
     lines!(ax_top, τ, model(τ, fit.param); merge(fit_defaults, fit_kw)...)
 
     if residuals

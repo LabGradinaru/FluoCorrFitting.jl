@@ -83,6 +83,8 @@ struct ParamLayout
     i_Kdyn::UnitRange{Int}
 end
 
+const DYN_COMP_ERROR = ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components.")
+
 function ParamLayout(spec::FCSModelSpec, scales::AbstractVector, params::AbstractVector{T}) where {T}
     L = length(params)
     length(scales) === L || throw(ArgumentError("Scaling and parameter vectors must be of the same length."))
@@ -92,7 +94,7 @@ function ParamLayout(spec::FCSModelSpec, scales::AbstractVector, params::Abstrac
 
     i_off = 0
     idx = 2
-    if hasoffset(spec)
+    if !hasoffset(spec)
         i_off = idx
         idx += 1
     end
@@ -112,18 +114,15 @@ function ParamLayout(spec::FCSModelSpec, scales::AbstractVector, params::Abstrac
 
     # indices for anomalous diffusion factors 
     i_α = 1:0 # empty UnitRange
-    αlen = 0
     α_scope = anom(spec)
     if α_scope == globe
         i_α = idx:idx
         idx += 1
-        αlen = 1
     elseif α_scope == perpop
         α_end = idx + n - 1
         L ≥ α_end || throw(ArgumentError("Parameter vector too short for $n unique anomalous exponents."))
         i_α = idx:α_end
         idx += n
-        αlen = n
     end
 
     # indices for diffusive population weights
@@ -136,9 +135,9 @@ function ParamLayout(spec::FCSModelSpec, scales::AbstractVector, params::Abstrac
     end
     
     # indices for dynamic lifetimes and weights
-    m = _ndyn_from_len(L - (idx - 1))
+    m = _ndyn_from_len(L - (idx-1))
     ics = isempty(spec.ics) ? ones(Int, m) : spec.ics
-    sum(ics) == m || throw(ArgumentError("Mismatch between dynamics expected in the parameter vector and the independent components."))
+    sum(ics) == m || throw(DYN_COMP_ERROR)
     i_τdyn = idx:idx+m-1
     i_Kdyn = idx+m:idx+2m-1
 
@@ -153,7 +152,7 @@ Container for per-evaluation cache buffers to minimize allocations during fittin
 """
 mutable struct EvalCache{T}
     sp::Vector{T}
-    τD::Vector{T} #note: may be either w0 or tauD depending on if the diffusivity is fixed or not
+    τD::Vector{T}
     α::Vector{T}
     wts::Vector{T}
     τdyn::Vector{T}
@@ -201,7 +200,7 @@ function FCSModel(spec::FCSModelSpec, t::AbstractVector, p0::AbstractVector; sca
     )
 
     ics = isempty(spec.ics) ? ones(Int, m) : Int.(spec.ics)
-    return FCSModel(spec, layout, scalesT, ics, cache, zeros(T, length(t)))
+    return FCSModel(spec, layout, scalesT, ics, cache, zeros(T, length(t)), zeros(T, length(t)))
 end
 
 function (m::FCSModel)(t::AbstractVector, p::AbstractVector)
@@ -250,6 +249,7 @@ end
 
     # weights (n-1) possibly empty
     if !isempty(m.layout.i_wts)
+        sum(m.cache.wts) ≤ 1 || throw(ArgumentError("Sum of diffusion population weights must be ≤ 1"))
         @inbounds for (j, i) in enumerate(m.layout.i_wts)
             m.cache.wts[j] = sp[i]
         end
@@ -333,6 +333,10 @@ function diff_factor!(out, t, κ, τs, αs, wts)
     return out
 end
 
+function diff_factor(t, κ, τs, αs, wts)
+    out = similar(t, eltype(t))
+    diff_factor!(out, t, κ, τs, αs, wts)
+end
 
 function dynamics_factor!(out, work, t, τs, Ks, ics)
     if isempty(τs)
@@ -358,6 +362,12 @@ function dynamics_factor!(out, work, t, τs, Ks, ics)
         idx += nb
     end
     return out
+end
+
+function dynamics_factor(t, τs, Ks, ics)
+    out = similar(t, eltype(t))
+    work = similar(t, eltype(t))
+    dynamics_factor!(out, work, t, τs, Ks, ics)
 end
 
 
@@ -386,6 +396,7 @@ udc_3d(t, τ, κ) = @. inv((1 + t/τ) * sqrt(1 + t/(κ^2 * τ)))
 
 "3D anomalous diffusion kernel with anomalous exponent α and structure factor κ = z0/w0"
 udc_3d(t, τ, κ, α) = @. inv((1 + (t/τ)^α) * sqrt(1 + (t/τ)^α / κ^2))
+
 
 "Kernel of a dynamic species of fraction `f` and lifetime `τ`."
 dyn(t, τ, f) = f * (exp(-t/τ) - 1)

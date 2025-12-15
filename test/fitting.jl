@@ -97,11 +97,11 @@
         spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d2, anom=FCSFitting.none, n_diff=1)
 
         # Generate noiseless data with the generalized model
-        model = FCSFitting.FCSModel(; spec)
+        p0 = [0.5, 0.0, 5e-4]   # rough initial guesses
+        model = FCSFitting.FCSModel(spec, τ, p0)
         y = model(τ, [g0_true, offset_true, τD_true])
 
         # Fit without bounds
-        p0 = [0.5, 0.0, 5e-4]   # rough initial guesses
         fit = FCSFitting.fcs_fit(spec, τ, y, p0)
         p̂ = coef(fit)
 
@@ -134,11 +134,11 @@
         # Model spec: 3D, Brownian, two diffusers, fixed offset
         spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d3, anom=FCSFitting.none, n_diff=2, offset=0.0)
 
-        model = FCSFitting.FCSModel(; spec)
+        p0 = [0.5, 5, 5e-4, 5e-5, 0.5, 5e-7, 0.25]
+        model = FCSFitting.FCSModel(spec, τ, p0)
         y = model(τ, [g0_true, κ_true, τD1_true, τD2_true, wt1_true, τdyn_true, Kdyn_true])
 
         # Fit with only lower bound
-        p0 = [0.5, 5, 5e-4, 5e-5, 0.5, 5e-7, 0.25]
         lower = zeros(7)
         fit = FCSFitting.fcs_fit(spec, τ, y, p0; lower)
         p̂ = coef(fit)
@@ -159,7 +159,9 @@
         τD_true = 8e-4
 
         spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d2, anom=FCSFitting.none, n_diff=1)
-        model = FCSFitting.FCSModel(; spec)
+        
+        p0 = [0.5, 0.0, 1e-3]
+        model = FCSFitting.FCSModel(spec, τ, p0)
         y_true = model(τ, [g0_true, offset_true, τD_true])
 
         # Heteroscedastic noise
@@ -168,7 +170,6 @@
 
         ch = FCSChannel("G1", τ, y, σ)
 
-        p0 = [0.5, 0.0, 1e-3]
         upper = [1, 1e-2, 1e-2]
 
         # Using σ (internally converted to 1/σ²)
@@ -177,7 +178,7 @@
 
         # Using explicit weights
         wt = @. 1 / σ^2
-        fitB = FCSFitting.fcs_fit(model, ch, p0; wt=wt, upper)
+        fitB = FCSFitting.fcs_fit(spec, ch, p0; wt=wt, upper)
         pB = pA = coef(fitB)
 
         @test pA ≈ pB rtol=1e-4
@@ -196,15 +197,15 @@
 
         # Spec: 2D, Brownian, single diffuser, fixed offset & fixed D (so p = [g0, w0])
         spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d2, anom=FCSFitting.none, n_diff=1, offset=off_fixed, diffusivity=D)
-        model = FCSFitting.FCSModel(; spec)
+        p0 = [0.001, 2e-9]
+        model = FCSFitting.FCSModel(spec, τ, p0)
         y = model(τ, [g0_true, w0_true])
 
         # Initial guesses & bounds
-        p0 = [0.001, 2e-9]
         lower = [0.0, 0.0]
         upper = [1.0, 500e-9]
 
-        fit = FCSFitting.fcs_fit(model, τ, y, p0; lower=lower, upper=upper)
+        fit = FCSFitting.fcs_fit(spec, τ, y, p0; lower=lower, upper=upper)
         p̂ = coef(fit)
         g0o, w0o = p̂
 

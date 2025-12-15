@@ -6,7 +6,6 @@ export FCSChannel,
        Dim, 
        Scope,
        FCSModelSpec,
-       FCSModel,
 
        FCSFitResult,
        coef,
@@ -42,7 +41,7 @@ using LsqFit
 using StatsAPI
 
 include("data_structures.jl")
-include("modeling.jl")
+include("modelling.jl")
 include("fitting.jl")
 include("calculators.jl")
 include("naming.jl")

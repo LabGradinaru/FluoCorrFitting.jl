@@ -106,10 +106,11 @@
             diffusivity = D,
             n_diff = 1,
         )
-        model3 = FCSFitting.FCSModel(; spec = spec3)
+        
+        p0_3 = [0.5, 5, 250e-9]
+        model3 = FCSFitting.FCSModel(spec3, τ, p0_3)
         y3_true = model3(τ, [g0, κ, w0])
 
-        p0_3 = [0.5, 5, 250e-9]
         fit3 = FCSFitting.fcs_fit(spec3, τ, y3_true, p0_3)
 
         τD_expected = FCSFitting.τD(D, w0)
@@ -138,10 +139,11 @@
             offset = 0.0,
             n_diff = 1,
         )
-        model3_free = FCSFitting.FCSModel(; spec = spec3_free)
+        
+        p0_3free = [0.5, 5, 0.0003125]
+        model3_free = FCSFitting.FCSModel(spec3_free, τ, p0_3free)
         y3_free_true = model3_free(τ, [g0, κ, τD_expected])
 
-        p0_3free = [0.5, 5, 0.0003125]
         lower = [0.0, 1.0, 1e-5]
         upper = [1.5, 10.0, 1e-3]
         fit3_free = FCSFitting.fcs_fit(spec3_free, τ, y3_free_true, p0_3free; lower, upper)
@@ -163,10 +165,11 @@
             diffusivity = D,
             n_diff = 1,
         )
-        model2_fixed = FCSFitting.FCSModel(; spec = spec2_fixed)
-        y2_fixed_true = model2_fixed(τ, [g0, w0])
-
+        
         p0_2f = [0.5, 250e-9]
+        model2_fixed = FCSFitting.FCSModel(spec2_fixed, τ, p0_2f)
+        y2_fixed_true = model2_fixed(τ, [g0, w0])
+        
         fit2_fixed = FCSFitting.fcs_fit(spec2_fixed, τ, y2_fixed_true, p0_2f)
 
         ar = FCSFitting.Aeff(w0)
@@ -186,10 +189,11 @@
             offset = 0.0,
             n_diff = 1,
         )
-        model2_free = FCSFitting.FCSModel(; spec = spec2_free)
-        y2_free_true = model2_free(τ, [g0, τD_true])
-
+        
         p0_2free = [0.3, τD_true*0.8]
+        model2_free = FCSFitting.FCSModel(spec2_free, τ, p0_2free)
+        y2_free_true = model2_free(τ, [g0, τD_true])
+ 
         fit2_free = FCSFitting.fcs_fit(spec2_free, τ, y2_free_true, p0_2free)
 
         # calling without w0 should error
@@ -220,9 +224,11 @@
             diffusivity = D,
             n_diff = 2,
         )
-        model3_glob = FCSFitting.FCSModel(; spec = spec3_glob)
-        y3_glob_true = model3_glob(τ, [g0, κ, w01, w02, α, w1])
+       
         p0_glob = [0.5, 5, w01, w02, 0.5, 0.25]
+        model3_glob = FCSFitting.FCSModel(spec3_glob, τ, p0_glob)
+        y3_glob_true = model3_glob(τ, [g0, κ, w01, w02, α, w1])
+        
         lower_glob = [0, 0, 250e-9, 650e-9, 0, 0]
         upper_glob = [1, 10, 350e-9, 750e-9, 1, 0.5]
         fit3_glob = FCSFitting.fcs_fit(spec3_glob, τ, y3_glob_true, p0_glob; lower=lower_glob, upper=upper_glob)
@@ -251,10 +257,12 @@
             diffusivity = D,
             n_diff = 2,
         )
-        τ = 10 .^ range(-7, 0; length=400)
-        model3_perpop = FCSFitting.FCSModel(; spec = spec3_perpop)
-        y3_perpop_true = model3_perpop(τ, [g0, κ, w01, w02, α1, α2, w1])
+        
         p0_perpop = [0.55, 5, w01, w02, 0.5, 1.5, 0.25]
+        τ = 10 .^ range(-7, 0; length=400)
+        model3_perpop = FCSFitting.FCSModel(spec3_perpop, τ, p0_perpop)
+        y3_perpop_true = model3_perpop(τ, [g0, κ, w01, w02, α1, α2, w1])
+        
         lower_perpop = [0, 0, 250e-9, 650e-9, 0, 1, 0]
         upper_perpop = [1, 10, 350e-9, 750e-9, 1, 2, 1]
         fit3_perpop = FCSFitting.fcs_fit(spec3_perpop, τ, y3_perpop_true, p0_perpop; lower=lower_perpop, upper=upper_perpop)
@@ -276,9 +284,10 @@
             diffusivity = D,
             n_diff = 1,
         )
-        model2_anom = FCSFitting.FCSModel(; spec = spec2_anom)
-        y2_anom_true = model2_anom(τ, [g0, w0, 0.85])  # [g0, w0, α]
         p0_2anom = [0.4, w0*1.1, 0.9]
+        model2_anom = FCSFitting.FCSModel(spec2_anom, τ, p0_2anom)
+        y2_anom_true = model2_anom(τ, [g0, w0, 0.85])  # [g0, w0, α]
+        
         fit2_anom = FCSFitting.fcs_fit(spec2_anom, τ, y2_anom_true, p0_2anom)
 
         @test FCSFitting.surface_density(spec2_anom, fit2_anom) ≈ sa_expected rtol=1e-6

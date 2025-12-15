@@ -188,12 +188,10 @@ end
 """
     fcs_fit(spec, times, data, p0) -> FCSFitResult
     fcs_fit(spec, channel, p0) -> FCSFitResult
-    fcs_fit(model, times, data, p0) -> FCSFitResult
-    fcs_fit(model, channel, p0) -> FCSFitResult
 
 Fit FCS data, in the form of a pair of lag times and the correlation curve, 
-based on a given `FCSModel` or its specifications, `FCSModelSpec` using 
-`LsqFit.curve_fit`, with parameter normalization. 
+based on specifications, `FCSModelSpec` using  `LsqFit.curve_fit`, 
+with parameter normalization. 
 `p0` is an initial model parameter guess (see Example).
 
 # Example 
@@ -250,7 +248,7 @@ function fcs_fit(spec::FCSModelSpec, τ::AbstractVector, data::AbstractVector, p
         (p0 ./ scales, scales)
     end
 
-    model = FCSModel(; spec, scales=scales_)
+    model = FCSModel(spec, τ, p0, scales=scales_)
 
     normalize_bounds(b) = b === nothing ? nothing :
         (length(b) == length(scales_) ? b ./ scales_ :
@@ -274,14 +272,3 @@ end
 
 fcs_fit(spec::FCSModelSpec, ch::FCSChannel, p0::AbstractVector; kwargs...) =
     fcs_fit(spec, ch.τ, ch.G, p0; σ=ch.σ, kwargs...)
-
-function fcs_fit(m::FCSModel, τ::AbstractVector, data::AbstractVector, p0::AbstractVector; kwargs...)
-    if m.scales === nothing
-        return fcs_fit(m.spec, τ, data, p0; kwargs...)
-    else
-        return fcs_fit(m.spec, τ, data, p0; scales=m.scales, kwargs...)
-    end
-end
-
-fcs_fit(m::FCSModel, ch::FCSChannel, p0::AbstractVector; kwargs...) =
-    fcs_fit(m, ch.τ, ch.G, p0; σ=ch.σ, kwargs...)

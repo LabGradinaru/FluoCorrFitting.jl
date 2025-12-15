@@ -12,15 +12,15 @@ CairoMakie.activate!()  # headless-friendly
 
     spec = FCSFitting.FCSModelSpec(; dim=FCSFitting.d3, anom=FCSFitting.none,
                                     n_diff=1, offset=off_true)
-    model = FCSFitting.FCSModel(; spec)
+    p0 = [0.5, 3.0, 1e-4]
+    model = FCSFitting.FCSModel(spec, τ, p0)
     y_clean = model(τ, [g0_true, κ_true, τD_true])
 
     # Slight noise for realistic plotting
     σ = 0.002
     y = @. y_clean + σ * randn()
 
-    # Fit quickly (unweighted is fine for this test)
-    p0 = [0.5, 3.0, 1e-4]
+    
     fit = FCSFitting.fcs_fit(spec, τ, y, p0)
 
     @test fit isa FCSFitting.FCSFitResult
