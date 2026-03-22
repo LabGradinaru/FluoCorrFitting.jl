@@ -5,9 +5,11 @@
 [![CI](https://github.com/LabGradinaru/FCSFitting.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/LabGradinaru/FCSFitting.jl/actions/workflows/ci.yml?query=branch%3Amain)
 [![codecov.io](https://codecov.io/github/LabGradinaru/FCSFitting.jl/branch/main/graph/badge.svg?token=ZH9L011XZQ)](http://codecov.io/github/LabGradinaru/FCSFitting.jl/branch/main)
 
-**FCSFitting** provides a lightweight, composable toolkit for modeling and fitting FCS autocorrelation curves. The nonlinear least‑squares backend is currently `LsqFit.jl`, with an intended move to `JuMP.jl` in the near future. Optional package extensions enable file I/O, tables, and publication‑quality plots.
+**FCSFitting** provides a lightweight, composable toolkit for modelling and fitting FCS correlation curves. Optional package extensions enable file I/O, tables, and publication‑quality plots.
 
 > **Status:** private pre‑release repository; APIs subject to change. Target Julia ≥ **1.10**
+
+
 
 
 ## Features
@@ -15,17 +17,18 @@
 * Generic 2D/3D diffusion models with optional anomalous diffusion (α) and multi‑component mixtures
 * Additive dynamic terms (e.g., exponential kinetic terms) and optional baseline offset
 * Parameter scaling and bounds handling for numerically stable fits
-* Clean separation of **model specification** vs **fit configuration**
+* Global fitting of diffusion coefficients and beam waists between multiple correlation curves
 * Optional extensions for:
   * Reading delimited text files (`DelimitedFiles.jl`)
-  * Pretty tabular summaries (`PrettyTables.jl`)
-  * LaTeX‑style labels in plots (`LaTeXStrings.jl`)
-  * Interactive/publication plots (`CairoMakie.jl`)
+  * Pretty tabular summaries of fits (`PrettyTables.jl`)
+  * Interactive/publication plots (`CairoMakie.jl` & `LaTeXStrings.jl`)
+
+
 
 
 ## Installation
 
-Until the package is registered, install via a local checkout or a private Git URL.
+Until the package is registered, install by adding the package from a local directory or via the Git URL.
 
 ### Option A — local path (recommended for development)
 
@@ -33,7 +36,7 @@ Until the package is registered, install via a local checkout or a private Git U
 julia> ]
 pkg> activate --shared fcs
 pkg> add CairoMakie LaTeXStrings DelimitedFiles PrettyTables IJulia
-pkg> dev /absolute/path/to/FCSFitting.jl
+pkg> add /absolute/path/to/FCSFitting.jl
 pkg> precompile
 ```
 
@@ -43,11 +46,13 @@ pkg> precompile
 julia> ]
 pkg> activate --shared fcs
 pkg> add CairoMakie LaTeXStrings DelimitedFiles PrettyTables IJulia
-pkg> dev git@github.com:LabGradinaru/FCSFitting.jl.git  # or https
+pkg> add git@github.com:LabGradinaru/FCSFitting.jl.git  # or https
 pkg> precompile
 ```
 
 > **Tip:** use `dev` (instead of `add`) to track local changes during development.
+
+
 
 
 ## Environments & Jupyter kernel (VS Code/Jupyter)
@@ -63,6 +68,8 @@ julia> IJulia.installkernel("Julia (@fcs)"; env=Dict("JULIA_PROJECT" => "@fcs"))
 ```
 
 2. **Select the kernel** in VS Code: `Ctrl+Shift+P` → *Notebook: Select Notebook Kernel* → *Select Another Kernel…* → *Jupyter Kernels* → **Julia (@fcs)**.
+
+
 
 
 ## Quick start
@@ -102,7 +109,21 @@ rh = hydrodynamic(diffusivity; scale="A") # hydrodynamic radius [Angstroms]
 ```
 
 
-### Reading your own data (via extension)
+### Global fitting
+
+```julia
+using FCSFitting
+
+# different molecules, same PSF → shared w₀
+spec1 = FCSModelSpec(dim=d2, anom=none, offset=0.0, diffusivity=D1)
+spec2 = FCSModelSpec(dim=d2, anom=none, offset=0.0, diffusivity=D2)
+gfit = fcs_fit([spec1, spec2], [τ1, τ2], [G1, G2], [p0_1, p0_2]; shared=:w0)
+fit1 = channel_result(gfit, 1)
+println(fit1)
+```
+
+
+### Reading your own data (via DelimitedFiles extension)
 
 If your data live in a delimited file (CSV/TSV), load `DelimitedFiles` **before** `FCSFitting` to enable the extension. The files are assumed to be in the order (column-wise): lag times, data, standard deviations (optional), which is then organized into `FCSChannel` objects:
 
@@ -123,6 +144,8 @@ channel = FCSChannel("sample", t, g, nothing)
 fig, fit = fcs_plot(spec, channel, initial_parameters)
 save("corr1.png", fig)
 ```
+
+
 
 
 ## Models and parameters
@@ -155,14 +178,14 @@ to the correlation. On the other hand, if the two states are understood to be **
 $$1 + T_{1,1} \left( e^{- t / \tau_{\mathrm{dyn},1,1}} - 1 \right) + T_{1,2} \left( e^{- t / \tau_{\mathrm{dyn},1,2}} - 1 \right).$$
 
 
-## Troubleshooting
 
-* **Extensions aren’t active**: ensure you loaded e.g. `CairoMakie` **before** `FCSFitting` in the same session.
+
+## Troubleshooting (basics)
+
 * **MethodError on model spec**: check that your parameter vector matches the model’s expected ordering.
-* **Slow/unstable fits**: provide reasonable bounds; use `scale` output from `fcs_fit` for diagnostics; reduce parameter correlations by fixing known values if possible.
+* **Slow/unstable fits**: 
+(a) provide reasonable bounds; 
+(b) use `scale` output from `fcs_fit` for diagnostics; 
+(c) reduce parameter correlations by fixing known values if possible;
+(d) ensure none of your data contains `NaN` or `Inf` values.
 * **Pkg can’t find the repo**: double‑check the path/URL and that you have permission to the private repository.
-
-
-## Contributing
-
-Issues and PRs are welcome. Please include a minimal reproducer and specify the Julia version. For larger contributions, open an issue first to discuss design/API.
