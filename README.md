@@ -7,8 +7,6 @@
 
 **FCSFitting** provides a lightweight, composable toolkit for modelling and fitting FCS correlation curves. Optional package extensions enable file I/O, tables, and publication‑quality plots.
 
-> **Status:** private pre‑release repository; APIs subject to change. Target Julia ≥ **1.10**
-
 
 
 
