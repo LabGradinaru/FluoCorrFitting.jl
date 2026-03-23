@@ -1,4 +1,4 @@
-name = "FluoCorrFitting"
+name = "FluorescenceCorrelationFitting"
 uuid = "4b8222f9-91d6-4fc3-8988-c3d342909eae"
 version = "0.6.1"
 authors = ["Aiyan Brown <aiyan.brown@mail.utoronto.ca>"]
@@ -14,9 +14,9 @@ LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 PrettyTables = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
 
 [extensions]
-FluoCorrFittingCairoMakieExt = ["CairoMakie", "LaTeXStrings"]
-FluoCorrFittingDelimitedFilesExt = ["DelimitedFiles"]
-FluoCorrFittingPrettyTablesExt = ["PrettyTables"]
+FluorescenceCorrelationFittingCairoMakieExt = ["CairoMakie", "LaTeXStrings"]
+FluorescenceCorrelationFittingDelimitedFilesExt = ["DelimitedFiles"]
+FluorescenceCorrelationFittingPrettyTablesExt = ["PrettyTables"]
 
 [compat]
 CairoMakie = "0.12, 0.13, 0.14, 0.15"

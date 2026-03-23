@@ -1,9 +1,9 @@
-module FluoCorrFittingPrettyTablesExt
+module FluorescenceCorrelationFittingPrettyTablesExt
 
 using PrettyTables
 using LsqFit
 
-import FluoCorrFitting: FCSFitResult, sigstr, fcs_table, infer_parameter_names, 
+import FluorescenceCorrelationFitting: FCSFitResult, sigstr, fcs_table, infer_parameter_names, 
                         τD, SI_PREFIXES, aic, aicc, bic
 
 
