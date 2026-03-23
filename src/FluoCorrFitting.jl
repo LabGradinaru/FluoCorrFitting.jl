@@ -1,4 +1,4 @@
-module FCSFitting
+module FluoCorrFitting
 
 export FCSChannel, 
        FCSData,

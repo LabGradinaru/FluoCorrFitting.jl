@@ -1,11 +1,11 @@
-# FCSFitting
+# FluoCorrFitting
 
 *Fitting fluorescence correlation spectroscopy (FCS) data in Julia*
 
-[![CI](https://github.com/LabGradinaru/FCSFitting.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/LabGradinaru/FCSFitting.jl/actions/workflows/ci.yml?query=branch%3Amain)
-[![codecov.io](https://codecov.io/github/LabGradinaru/FCSFitting.jl/branch/main/graph/badge.svg)](http://codecov.io/github/LabGradinaru/FCSFitting.jl/branch/main)
+[![CI](https://github.com/LabGradinaru/FluoCorrFitting.jl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/LabGradinaru/FluoCorrFitting.jl/actions/workflows/ci.yml?query=branch%3Amain)
+[![codecov.io](https://codecov.io/github/LabGradinaru/FluoCorrFitting.jl/branch/main/graph/badge.svg)](http://codecov.io/github/LabGradinaru/FluoCorrFitting.jl/branch/main)
 
-**FCSFitting** provides a lightweight, composable toolkit for modelling and fitting FCS correlation curves. Optional package extensions enable file I/O, tables, and publication‑quality plots.
+**FluoCorrFitting** provides a lightweight, composable toolkit for modelling and fitting FCS correlation curves. Optional package extensions enable file I/O, tables, and publication‑quality plots.
 
 
 
@@ -34,7 +34,7 @@ Until the package is registered, install by adding the package from a local dire
 julia> ]
 pkg> activate --shared fcs
 pkg> add CairoMakie LaTeXStrings DelimitedFiles PrettyTables IJulia
-pkg> add /absolute/path/to/FCSFitting.jl
+pkg> add /absolute/path/to/FluoCorrFitting.jl
 pkg> precompile
 ```
 
@@ -44,7 +44,7 @@ pkg> precompile
 julia> ]
 pkg> activate --shared fcs
 pkg> add CairoMakie LaTeXStrings DelimitedFiles PrettyTables IJulia
-pkg> add git@github.com:LabGradinaru/FCSFitting.jl.git  # or https
+pkg> add git@github.com:LabGradinaru/FluoCorrFitting.jl.git  # or https
 pkg> precompile
 ```
 
@@ -73,7 +73,7 @@ julia> IJulia.installkernel("Julia (@fcs)"; env=Dict("JULIA_PROJECT" => "@fcs"))
 ## Quick start
 
 ```julia
-using FCSFitting
+using FluoCorrFitting
 
 # Example: 3D normal diffusion with one kinetic (exponential) term and an offset.
 diffusivity = 5e-11 # m^2/s
@@ -99,7 +99,7 @@ println(fit)
 ### Calculating relevant quantities
 
 ```julia
-using FCSFitting
+using FluoCorrFitting
 diff_time = τD(spec, fit; scale="m") # diffusion time [ms]
 confocal_volume = Veff(spec, fit; scale="n") # confocal volume [nm^3]
 conc = concentration(spec, fit; scale="n") # effective concentration in nM
@@ -110,7 +110,7 @@ rh = hydrodynamic(diffusivity; scale="A") # hydrodynamic radius [Angstroms]
 ### Global fitting
 
 ```julia
-using FCSFitting
+using FluoCorrFitting
 
 # different molecules, same PSF → shared w₀
 spec1 = FCSModelSpec(dim=d2, anom=none, offset=0.0, diffusivity=D1)
@@ -123,10 +123,10 @@ println(fit1)
 
 ### Reading your own data (via DelimitedFiles extension)
 
-If your data live in a delimited file (CSV/TSV), load `DelimitedFiles` **before** `FCSFitting` to enable the extension. The files are assumed to be in the order (column-wise): lag times, data, standard deviations (optional), which is then organized into `FCSChannel` objects:
+If your data live in a delimited file (CSV/TSV), load `DelimitedFiles` **before** `FluoCorrFitting` to enable the extension. The files are assumed to be in the order (column-wise): lag times, data, standard deviations (optional), which is then organized into `FCSChannel` objects:
 
 ```julia
-using DelimitedFiles, FCSFitting
+using DelimitedFiles, FluoCorrFitting
 data = read_fcs(filepath; start_idx = 20, end_idx = 300);
 fit = fcs_fit(spec, data.channel[1].τ, data.channel[1].G, initial_parameters; lower = lower_bounds, upper = upper_bounds)
 ```
@@ -135,7 +135,7 @@ fit = fcs_fit(spec, data.channel[1].τ, data.channel[1].G, initial_parameters; l
 ### Plotting (via CairoMakie extension)
 
 ```julia
-using CairoMakie, LaTeXStrings, FCSFitting
+using CairoMakie, LaTeXStrings, FluoCorrFitting
 
 channel = FCSChannel("sample", t, g, nothing)
 
@@ -150,7 +150,7 @@ save("corr1.png", fig)
 
 `FCSModelSpec` declares model structure; numerical values are supplied via the parameter vector. The intended order for the parameter vector arguments can be accessed via 
 ```julia
-using FCSFitting
+using FluoCorrFitting
 
 coarse_parameter_order = expected_parameter_names(spec)
 precise_parameter_order = expected_parameter_names(spec, initial_parameters)
